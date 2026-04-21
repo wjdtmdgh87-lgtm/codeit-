@@ -37,22 +37,28 @@ yolo11s.pt
 yolo11n.pt
 wandb/
 
-# 폴더 구조는 깃에 올리고, 내부 데이터만 무시 (단, .gitkeep 파일은 포함)
-data/images/**/*
+# 폴더 구조는 깃에 올리고, 내부 데이터만 무시
+data/images/test/**/*
+!data/images/test/**/README.md
 
-data/labels/**/*
+data/images/train/**/*
+!data/images/train/**/README.md
+
+data/labels/train/**/*
+!data/labels/train/**/README.md
 
 data/splits/**/*
 
-data/processed/**/*
-
-data/*.cache
+*.cache
 
 models/**/*
+!models/**/README.md
 
 results/**/*
+!results/**/README.md
 
 runs/**/*
+!runs/**/README.md
 
 # OS generated files
 .DS_Store
