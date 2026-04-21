@@ -31,21 +31,28 @@ venv.bak/
 *.pt
 *.pth
 *.cache
-runs/
 yolov8n.pt
 yolov8s.pt
 yolo11s.pt
 yolo11n.pt
 wandb/
 
-# Project specific (Large files & outputs)
-data/images/
-data/labels/
-data/splits/
-data/processed/
+# 폴더 구조는 깃에 올리고, 내부 데이터만 무시 (단, .gitkeep 파일은 포함)
+data/images/**/*
+
+data/labels/**/*
+
+data/splits/**/*
+
+data/processed/**/*
+
 data/*.cache
-models/
-results/
+
+models/**/*
+
+results/**/*
+
+runs/**/*
 
 # OS generated files
 .DS_Store

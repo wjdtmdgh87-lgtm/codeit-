@@ -1,7 +1,4 @@
 # 경구약제 객체 검출 — YOLO 학습 설정 (Ultralytics)
-# 생성일 2026-04-20 · 데이터 엔지니어 : adam
-# 사용법 : yolo detect train data=data.yaml model=yolov8s.pt imgsz=1024 epochs=200
-# fold 변경 : train / val 경로의 fold1 을 fold2 ~ fold5 로 바꾸면 됨
 
 path: .           # 이 yaml 파일이 있는 폴더 기준
 train: data/splits/fold1_train.txt   # train 이미지 경로 목록
