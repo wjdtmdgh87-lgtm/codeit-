@@ -6,8 +6,8 @@ model:
   weights: yolov8m.pt
 
 data:
-  image_dir: ~/Downloads/sprint_ai_project1_data/train_images
-  annotation_dir: ~/Downloads/sprint_ai_project1_data/train_annotations
+  image_dir: data/train_images
+  annotation_dir: data/train_annotations
   val_size: 0.2
   copy_mode: copy
 
