@@ -12,7 +12,7 @@ from config import TRAIN, DATASET_YAML, MODELS_DIR, RESULTS_DIR
 
 def build_model(nc: int = 56) -> YOLO:
     """
-    YOLOv8n 가중치를 불러옵니다.
+    YOLO 모델 가중치를 불러옵니다.
     클래스 개수(nc)에 따른 헤드 교체는 YOLO.train() 시 data.yaml을 읽고 자동으로 수행됩니다.
     """
     model = YOLO(TRAIN["model"])
