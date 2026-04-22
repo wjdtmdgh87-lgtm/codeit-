@@ -95,14 +95,28 @@ def train():
 
     best_src = RESULTS_DIR / run_name / "weights" / "test_best.pt"
     if best_src.exists():
-        shutil.copy2(best_src, MODELS_DIR / "test_best_model.pt.pt")
-        print(f"[저장] test_best_model.pt.pt → {MODELS_DIR}")
+        shutil.copy2(best_src, MODELS_DIR / "test_best_model.pt")
+        print(f"[저장] test_best_model.pt → {MODELS_DIR}")
 
 def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0.45):
     """학습된 모델로 예측합니다."""
-    # TODO: (2026.04.22 minjae)
-    pass
+    w     = weights or str(MODELS_DIR / "test_best_model.pt")
+    model = YOLO(w)
     
+    # 모델 이름을 활용하여 예측 결과 저장 폴더 지정 (예: results/predict_yolo11s)
+    model_stem = Path(TEST_TRAIN["model"]).stem
+    run_name   = f"predict_{model_stem}"
+    
+    return model.predict(
+        source, 
+        conf=conf, 
+        iou=iou, 
+        project=str(Path("runs/detect").absolute()), 
+        name=run_name, 
+        exist_ok=False,
+        save=True, 
+        verbose=True
+    )
 
 if __name__ == "__main__":
     build_model(nc=56)
