@@ -1,6 +1,6 @@
 """
 테스트 구글 코랩(Colab)
-tests/config.py
+tests/test_config.py
 """
 from pathlib import Path
 
@@ -8,6 +8,7 @@ ROOT = Path("/content")
 
 # ── 경로 ──────────────────────────────────────
 DATA_DIR      = ROOT / "data" / "v3"
+SPLITS_DIR    = DATA_DIR / "splits"
 TRAIN_IMG_DIR = DATA_DIR / "images"
 TEST_IMG_DIR  = DATA_DIR / "test_images"
 ANNOT_DIR     = DATA_DIR / "labels"
