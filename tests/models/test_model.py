@@ -47,7 +47,7 @@ def build_model(nc: int = 56) -> YOLO:
     return model
 
 def train():
-    """학습 실행 후 test_best.pt 를 models/ 에 저장합니다."""
+    """학습 실행 후 best.pt 를 models/ 에 저장합니다."""
     cfg    = TEST_TRAIN
     device = "0" if torch.cuda.is_available() else "cpu"
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -93,7 +93,7 @@ def train():
         verbose       = True, # 학습 로그 상세 출력
     )
 
-    best_src = RESULTS_DIR / run_name / "weights" / "test_best.pt"
+    best_src = RESULTS_DIR / run_name / "weights" / "best.pt"
     if best_src.exists():
         shutil.copy2(best_src, MODELS_DIR / "test_best_model.pt")
         print(f"[저장] test_best_model.pt → {MODELS_DIR}")
