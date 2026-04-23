@@ -22,7 +22,7 @@
     <td align="center" width="150">
       <img src="docs/profiles/Adam/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
       <b>Adam</b><br/>
-      <a href="https://github.com/Adam">@Adam</a>
+      <a href="https://github.com/Adam-1228">@Adam</a>
     </td>
     <td align="center" width="150">
       <img src="docs/profiles/Eastar0102/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
@@ -37,12 +37,12 @@
     <td align="center" width="150">
       <img src="docs/profiles/minjaejeon/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
       <b>minjaejeon</b><br/>
-      <a href="https://github.com/minjaejeon">@minjaejeon</a>
+      <a href="https://github.com/minjaejeon0827">@minjaejeon</a>
     </td>
     <td align="center" width="150">
       <img src="docs/profiles/%EA%B8%B0%ED%95%98/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
       <b>기하</b><br/>
-      <a href="https://github.com/기하">@기하</a>
+      <a href="https://github.com/wenttoofar">@기하</a>
     </td>
     <td align="center" width="150">
       <img src="docs/profiles/%EB%AC%B4%EC%8B%AC/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
