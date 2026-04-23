@@ -3,6 +3,7 @@
 - 실험 코드에서 재사용할 수 있도록 train() 함수에 run_name, train_overrides 인자를 추가함
 - 실험별 설정을 TRAIN 기본값 위에 덮어쓸 수 있게 변경함
 - 학습 완료 후 run directory 경로를 반환하도록 변경함
+- Apple Silicon 환경에서 MPS를 우선 사용하도록 device 선택 로직을 수정함
 """
 
 import shutil
@@ -29,7 +30,15 @@ def train(run_name: str = None, train_overrides: dict = None):
     if train_overrides:
         cfg.update(train_overrides)
 
-    device = "0" if torch.cuda.is_available() else "cpu"
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        device = "mps"
+    elif torch.cuda.is_available():
+        device = "0"
+    else:
+        device = "cpu"
+
+    print(f"[장치] {device}")
+
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -42,7 +51,7 @@ def train(run_name: str = None, train_overrides: dict = None):
         project       = str(RESULTS_DIR), # 결과 저장 폴더
         name          = run_name, # 실험 이름
         exist_ok      = True, # 같은 이름 폴더 덮어쓰기 허용
-        device        = device, # 학습 장치 (0=GPU, cpu)
+        device        = device, # 학습 장치 (mps, 0=GPU, cpu)
         imgsz         = cfg["imgsz"], # 이미지 크기
         batch         = cfg["batch"], # 배치 크기
         epochs        = cfg["epochs"], # 학습 에포크 수

@@ -127,3 +127,35 @@ def compare_results():
     if "mAP50" in df.columns:
         print("\n=== mAP50 기준 Top 5 ===")
         print(df.sort_values("mAP50", ascending=False).head(5))
+
+def run_all_experiments():
+    experiment_order = [
+        "baseline",
+        "imgsz_960",
+        "longtrain",
+        "model_m",
+        "strong_aug",
+    ]
+
+    for exp_name in experiment_order:
+        print(f"\n\n===== {exp_name} 실험 시작 =====")
+        try:
+            run_experiment(exp_name)
+        except Exception as e:
+            print(f"[오류] {exp_name} 실험 실패: {e}")
+
+def run_all_experiments():
+    experiment_order = [
+        "baseline",
+        "imgsz_960",
+        "longtrain",
+        "model_m",
+        "strong_aug",
+    ]
+
+    for exp_name in experiment_order:
+        print(f"\n\n===== {exp_name} 실험 시작 =====")
+        try:
+            run_experiment(exp_name)
+        except Exception as e:
+            print(f"[오류] {exp_name} 실험 실패: {e}")

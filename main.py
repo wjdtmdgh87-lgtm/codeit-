@@ -2,15 +2,18 @@
 [수정 사항]
 - 기존 data / train / predict / all 모드는 유지함
 - experiment 모드를 추가해서 실험 이름별로 학습을 실행할 수 있게 함
+- experiment_all 모드를 추가해서 여러 실험을 순차 실행할 수 있게 함
 - compare 모드를 추가해서 누적된 실험 결과를 비교할 수 있게 함
+- 기존 한국어 사용법/출력문은 유지함
 
 사용법:
-  python main.py --mode data        # 데이터 변환 + 분할
-  python main.py --mode train       # 학습
-  python main.py --mode predict     # 예측  (--source 필수)
-  python main.py --mode all         # data + train 순서대로
-  python main.py --mode experiment  # 실험 실행 (--exp 지정 가능)
-  python main.py --mode compare     # 실험 결과 비교
+  python main.py --mode data
+  python main.py --mode train
+  python main.py --mode predict --source data/images/test/
+  python main.py --mode all
+  python main.py --mode experiment --exp baseline
+  python main.py --mode experiment_all
+  python main.py --mode compare
 """
 
 import sys
@@ -25,7 +28,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--mode",
-        choices=["data", "train", "predict", "all", "experiment", "compare"],
+        choices=["data", "train", "predict", "all", "experiment", "experiment_all", "compare"],
         default="all"
     )
     parser.add_argument("--source", default=None, help="predict 모드 시 이미지 경로")
@@ -57,6 +60,11 @@ def main():
         from experiment import run_experiment
         print("\n=== 실험 실행 ===")
         run_experiment(args.exp)
+
+    if args.mode == "experiment_all":
+        from experiment import run_all_experiments
+        print("\n=== 전체 실험 실행 ===")
+        run_all_experiments()
 
     if args.mode == "compare":
         from experiment import compare_results
