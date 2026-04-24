@@ -9,12 +9,10 @@ tests/test_main.py
   python main.py --mode all      # data + train 순서대로
 """
 
-import sys
 import argparse
-from pathlib import Path
 import models.test2_model as t2
 import test_dataset as td
-
+from test_config import TEST_IMG_DIR
 
 def main():
     parser = argparse.ArgumentParser()
@@ -42,7 +40,8 @@ def main():
         
         # 혹시라도 경로가 비어있을 경우를 대비한 안전장치
         if not args.source:
-            args.source = '/content/data/v3/test_images' 
+            # args.source = '/content/data/v3/test_images'
+            args.source = TEST_IMG_DIR
             
         # from model import predict
         print("\n=== 예측 ===")
