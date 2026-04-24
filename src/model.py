@@ -1,13 +1,14 @@
 """
 src/model.py
-YOLOv8n 사전 학습 가중치 로드 + nc=56 헤드 교체
+YOLOv8/11 사전 학습 가중치 로드 + nc=56 헤드 교체
 """
 
+import gc
 import shutil
 import torch
 from pathlib import Path
 from ultralytics import YOLO
-from config import TRAIN, DATASET_YAML, MODELS_DIR, RESULTS_DIR
+from config import TRAIN, DATASET_YAML, MODELS_DIR, RESULTS_DIR, ROOT
 
 
 def build_model(nc: int = 56) -> YOLO:
@@ -20,75 +21,146 @@ def build_model(nc: int = 56) -> YOLO:
     return model
 
 
-def train():
-    """학습 실행 후 best.pt 를 models/ 에 저장합니다."""
+def _run_train(yaml_path: str, run_name: str):
+    """학습 실행 공통 함수"""
     cfg    = TRAIN
     device = "0" if torch.cuda.is_available() else "cpu"
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    model_stem = Path(cfg["model"]).stem
-    run_name   = f"baseline_{model_stem}"  
 
     model = build_model(nc=56)
     model.train(
-        data          = str(DATASET_YAML), # dataset.yaml 경로
-        project       = str(RESULTS_DIR), # 결과 저장 폴더
-        name          = run_name, # 실험 이름 (results/baseline_yolov8n/)
-        exist_ok      = True, # 같은 이름 폴더 덮어쓰기 허용
-        device        = device, # 학습 장치 (0=GPU, cpu)
-        imgsz         = cfg["imgsz"], # 이미지 크기
-        batch         = cfg["batch"], # 배치 크기
-        epochs        = cfg["epochs"], # 학습 에포크 수
-        optimizer     = cfg["optimizer"], # 옵티마이저(SGD)
-        lr0           = cfg["lr0"], # 초기 학습률 (0.01)
-        lrf           = cfg["lrf"], # 최종 lr 비율 — 최종 lr = lr0 * lrf (0.01*0.01=1e-4)
-        momentum      = cfg["momentum"], # SGD 모멘텀 (0.937)
-        weight_decay  = cfg["weight_decay"], # 가중치 감쇠 — 과적합 방지 (5e-4)
-        warmup_epochs = cfg["warmup_epochs"], # lr 워밍업 epoch 수 (3)
-        patience      = cfg["patience"], # early stopping 기준 epoch (0=비활성)
-        save_period   = cfg["save_period"], # N epoch마다 체크포인트 저장 (10)
-        cls           = cfg["cls"], # 클래스 손실 가중치 (0.5)
-
-        #====== 증강 설정 ========= 
-        degrees       = cfg["degrees"], # 회전 데이터 증강 각도 (15.0)
-        fliplr        = cfg["fliplr"], # 좌우 반전 데이터 증강 비율 (0.5)
-        flipud        = cfg["flipud"], # 상하 반전 데이터 증강 비율 (0.0)
-        hsv_h         = cfg["hsv_h"], # Hue jitter (색조 변화)
-        hsv_s         = cfg["hsv_s"], # Saturation jitter (채도 변화)
-        hsv_v         = cfg["hsv_v"], # Value jitter (밝기 변화)
-        mosaic        = cfg["mosaic"], # Mosaic 증강 — 4장 합성 (1.0=항상)
-        mixup         = cfg["mixup"], # MixUp 증강 — 두 이미지 혼합 (0.1)
-        copy_paste    = cfg["copy_paste"], # Copy-Paste — 희소 클래스 오버샘플 (0.2)
-        
-        plots         = True,  # PR curve, confusion matrix 등 자동 저장
-        verbose       = True, # 학습 로그 상세 출력
+        data          = yaml_path,
+        project       = str(RESULTS_DIR),
+        name          = run_name,
+        exist_ok      = True,
+        device        = device,
+        imgsz         = cfg["imgsz"],
+        batch         = cfg["batch"],
+        epochs        = cfg["epochs"],
+        optimizer     = cfg["optimizer"],
+        lr0           = cfg["lr0"],
+        lrf           = cfg["lrf"],
+        momentum      = cfg["momentum"],
+        weight_decay  = cfg["weight_decay"],
+        warmup_epochs = cfg["warmup_epochs"],
+        patience      = cfg["patience"],
+        save_period   = cfg["save_period"],
+        cls           = cfg["cls"],
+        degrees       = cfg["degrees"],
+        fliplr        = cfg["fliplr"],
+        flipud        = cfg["flipud"],
+        hsv_h         = cfg["hsv_h"],
+        hsv_s         = cfg["hsv_s"],
+        hsv_v         = cfg["hsv_v"],
+        mosaic        = cfg["mosaic"],
+        mixup         = cfg["mixup"],
+        copy_paste    = cfg["copy_paste"],
+        close_mosaic  = cfg["close_mosaic"],
+        plots         = True,
+        verbose       = True,
     )
 
+    # best.pt → models/fold{N}_{model}_best.pt
+    best_src = RESULTS_DIR / run_name / "weights" / "best.pt"
+    if best_src.exists():
+        dst = MODELS_DIR / f"{run_name}_best.pt"
+        shutil.copy2(best_src, dst)
+        print(f"[저장] {dst.name} → {MODELS_DIR}")
+
+    # fold 간 GPU 메모리 해제
+    del model
+    gc.collect()
+    torch.cuda.empty_cache()
+
+
+def train():
+    """data.yaml 기준 단일 학습 (fold 1 기본)"""
+    cfg        = TRAIN
+    model_stem = Path(cfg["model"]).stem
+    run_name   = f"baseline_{model_stem}"
+    _run_train(str(DATASET_YAML), run_name)
+
+    # best.pt → models/best_model.pt 복사
     best_src = RESULTS_DIR / run_name / "weights" / "best.pt"
     if best_src.exists():
         shutil.copy2(best_src, MODELS_DIR / "best_model.pt")
         print(f"[저장] best_model.pt → {MODELS_DIR}")
 
 
+def train_all_folds(n_folds: int = 5):
+    """
+    fold 1~n 을 순서대로 자동 학습합니다.
+    각 fold 결과 → models/fold{N}_{model}_best.pt
+    WBF 앙상블 시 이 파일들을 사용합니다.
+    """
+    import yaml
+
+    model_stem = Path(TRAIN["model"]).stem
+    base_yaml  = ROOT / "data.yaml"
+
+    print(f"=== {n_folds}-Fold 전체 학습 시작 ({model_stem}) ===\n")
+
+    for fold in range(1, n_folds + 1):
+        print(f"\n{'='*50}")
+        print(f"  Fold {fold} / {n_folds} 학습 시작")
+        print(f"{'='*50}")
+
+        # fold별 임시 yaml 생성
+        with open(base_yaml, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        data["train"] = f"data/splits/fold{fold}_train_oversampled.txt"
+        data["val"]   = f"data/splits/fold{fold}_val.txt"
+        tmp_yaml = ROOT / f"data_fold{fold}.yaml"
+        with open(tmp_yaml, "w", encoding="utf-8") as f:
+            yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
+
+        run_name = f"fold{fold}_{model_stem}"
+        _run_train(str(tmp_yaml), run_name)
+
+        print(f"  Fold {fold} 완료\n")
+
+    print("\n=== 전체 Fold 학습 완료 ===")
+    print("저장된 모델:")
+    for f in sorted(MODELS_DIR.glob("fold*_best.pt")):
+        print(f"  {f.name}")
+
+
 def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0.45):
     """학습된 모델로 예측합니다."""
     w     = weights or str(MODELS_DIR / "best_model.pt")
     model = YOLO(w)
-    
-    # 모델 이름을 활용하여 예측 결과 저장 폴더 지정 (예: results/predict_yolo11s)
+
     model_stem = Path(TRAIN["model"]).stem
     run_name   = f"predict_{model_stem}"
-    
-    return model.predict(
-        source, 
-        conf=conf, 
-        iou=iou, 
-        project=str(Path("runs/detect").absolute()), 
-        name=run_name, 
-        exist_ok=False,
-        save=True, 
-        verbose=True
+
+    results = model.predict(
+        source,
+        conf     = conf,
+        iou      = iou,
+        project  = str(Path("runs/detect").absolute()),
+        name     = run_name,
+        exist_ok = False,
+        save     = True,
+        verbose  = True,
     )
+
+    # 클래스별 탐지 수 집계
+    from collections import defaultdict
+    class_counts = defaultdict(int)
+    class_names  = model.names
+
+    for r in results:
+        for cls_id in r.boxes.cls.tolist():
+            class_counts[int(cls_id)] += 1
+
+    print("\n=== 클래스별 탐지 수 ===")
+    for cls_id, count in sorted(class_counts.items(), key=lambda x: -x[1]):
+        print(f"  {class_names[cls_id]:<45} {count}개")
+    print(f"\n  총 탐지: {sum(class_counts.values())}개")
+    print(f"  탐지된 클래스: {len(class_counts)}종 / {len(class_names)}종")
+
+    return results
 
 
 if __name__ == "__main__":
