@@ -1,9 +1,13 @@
 """
-[추가 사항]
-- YOLO baseline / 비교 실험을 한 파일에서 실행할 수 있도록 새로 만든 파일
-- baseline, imgsz_960, longtrain, model_m, strong_aug 실험 설정을 정의함
-- 각 실험 실행 후 results.csv 에서 mAP50, mAP50-95, precision, recall 을 추출함
-- 추출한 결과를 report_template.py 를 통해 요약 파일로 누적 저장함
+[수정 사항]
+- 모델 1(YOLO11 계열) 빠른 검증용 테스트 5개를 추가함
+- 각 테스트는 성능 차이와 학습 안정성을 빠르게 확인하기 위한 짧은 실험용 설정임
+- test_01_sanity: 최소 동작 확인용
+- test_02_current_short: 현재 모델팀 기본 설정 축약판
+- test_03_imgsz_960: 입력 크기 영향 확인용
+- test_04_small_model: 더 작은 모델(yolo11n) 비교용
+- test_05_no_heavy_aug: 강한 증강 제거 영향 확인용
+- 결과는 results.csv 에서 mAP50, mAP50-95, precision, recall 을 추출해 요약 파일로 누적 저장함
 """
 
 from copy import deepcopy
@@ -18,26 +22,44 @@ from eval.report_template import save_yolo_result
 
 
 EXPERIMENTS = {
-    "baseline": {},
-    "imgsz_960": {
-        "imgsz": 960,
-    },
-    "longtrain": {
-        "imgsz": 1024,
-        "epochs": 400,
-        "save_period": 20,
-    },
-    "model_m": {
-        "model": "yolo11m.pt",
-        "imgsz": 1024,
+    "test_01_sanity": {
+        "model": "yolo11s.pt",
+        "imgsz": 640,
         "batch": 4,
-        "epochs": 300,
+        "epochs": 5,
     },
-    "strong_aug": {
-        "degrees": 20.0,
-        "mosaic": 1.0,
-        "mixup": 0.2,
-        "copy_paste": 0.3,
+    "test_02_current_short": {
+        "model": "yolo11s.pt",
+        "imgsz": 1024,
+        "batch": 8,
+        "epochs": 5,
+    },
+    "test_03_imgsz_960": {
+        "model": "yolo11s.pt",
+        "imgsz": 960,
+        "batch": 8,
+        "epochs": 5,
+    },
+    "test_04_small_model": {
+        "model": "yolo11n.pt",
+        "imgsz": 1024,
+        "batch": 8,
+        "epochs": 5,
+    },
+    "test_05_no_heavy_aug": {
+        "model": "yolo11s.pt",
+        "imgsz": 1024,
+        "batch": 8,
+        "epochs": 5,
+        "degrees": 0.0,
+        "fliplr": 0.0,
+        "flipud": 0.0,
+        "mosaic": 0.0,
+        "mixup": 0.0,
+        "copy_paste": 0.0,
+        "hsv_h": 0.0,
+        "hsv_s": 0.0,
+        "hsv_v": 0.0,
     },
 }
 
@@ -128,29 +150,17 @@ def compare_results():
         print("\n=== mAP50 기준 Top 5 ===")
         print(df.sort_values("mAP50", ascending=False).head(5))
 
-def run_all_experiments():
-    experiment_order = [
-        "baseline",
-        "imgsz_960",
-        "longtrain",
-        "model_m",
-        "strong_aug",
-    ]
-
-    for exp_name in experiment_order:
-        print(f"\n\n===== {exp_name} 실험 시작 =====")
-        try:
-            run_experiment(exp_name)
-        except Exception as e:
-            print(f"[오류] {exp_name} 실험 실패: {e}")
 
 def run_all_experiments():
+    """
+    모델 1 빠른 비교용 테스트 5개를 순차 실행합니다.
+    """
     experiment_order = [
-        "baseline",
-        "imgsz_960",
-        "longtrain",
-        "model_m",
-        "strong_aug",
+        "test_01_sanity",
+        "test_02_current_short",
+        "test_03_imgsz_960",
+        "test_04_small_model",
+        "test_05_no_heavy_aug",
     ]
 
     for exp_name in experiment_order:

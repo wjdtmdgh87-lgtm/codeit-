@@ -15,8 +15,7 @@ MODELS_DIR    = ROOT / "models"
 RESULTS_DIR   = ROOT / "results"
 
 # dataset.yaml 경로 (프로젝트 루트에 위치)
-DATASET_YAML  = ROOT / "data.yaml"
-
+DATASET_YAML = Path("/Users/tnerkfkr/projects/v3/data.yaml")
 # ── 이미지 원본 규격 ───────────────────────────
 IMG_W, IMG_H  = 976, 1280
 
