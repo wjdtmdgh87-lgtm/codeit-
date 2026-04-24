@@ -1,8 +1,9 @@
 # 경구약제 객체 검출 — YOLO 학습 설정 (Ultralytics)
 
 path: .           # 이 yaml 파일이 있는 폴더 기준
-train: data/splits/fold1_train.txt   # train 이미지 경로 목록
-val:   data/splits/fold1_val.txt      # val   이미지 경로 목록
+# 전체 데이터 학습하려면 data/images로 변환
+train: data/splits/fold1_train_oversampled.txt   # train 이미지 경로 목록
+val:   data/splits/fold1_val.txt     # val   이미지 경로 목록
 test:  data/images/test              # 라벨 없는 추론용 이미지 폴더
 
 nc: 56
