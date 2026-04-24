@@ -1,6 +1,9 @@
 """
 테스트 구글 코랩(Colab)
 tests/test_config.py
+
+early stopping (조기 중단)
+참고: https://wikidocs.net/120091
 """
 from pathlib import Path
 
