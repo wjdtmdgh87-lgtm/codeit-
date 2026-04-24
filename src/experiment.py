@@ -1,13 +1,10 @@
 """
 [수정 사항]
-- 모델 1(YOLO11 계열) 빠른 검증용 테스트 5개를 추가함
-- 각 테스트는 성능 차이와 학습 안정성을 빠르게 확인하기 위한 짧은 실험용 설정임
-- test_01_sanity: 최소 동작 확인용
-- test_02_current_short: 현재 모델팀 기본 설정 축약판
-- test_03_imgsz_960: 입력 크기 영향 확인용
-- test_04_small_model: 더 작은 모델(yolo11n) 비교용
-- test_05_no_heavy_aug: 강한 증강 제거 영향 확인용
-- 결과는 results.csv 에서 mAP50, mAP50-95, precision, recall 을 추출해 요약 파일로 누적 저장함
+- 실험 설정을 EXPERIMENTS 딕셔너리 하드코딩 방식에서 YAML 파일 로드 방식으로 변경함
+- config/experiments/*.yaml 파일을 읽어 실험 설정을 구성함
+- experiment_name 필드를 YAML에서 읽고, 없으면 파일명(stem)을 사용함
+- 각 실험 완료 후 results.csv 에서 mAP50, mAP50-95, precision, recall 을 추출함
+- 추출한 결과를 report_template.py 를 통해 요약 파일로 누적 저장함
 """
 
 from copy import deepcopy
@@ -15,64 +12,49 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+import yaml
 
-from config import TRAIN, RESULTS_DIR
+from config import TRAIN, RESULTS_DIR, ROOT
 from model import train as run_train
 from eval.report_template import save_yolo_result
 
 
-EXPERIMENTS = {
-    "test_01_sanity": {
-        "model": "yolo11s.pt",
-        "imgsz": 640,
-        "batch": 4,
-        "epochs": 5,
-    },
-    "test_02_current_short": {
-        "model": "yolo11s.pt",
-        "imgsz": 1024,
-        "batch": 8,
-        "epochs": 5,
-    },
-    "test_03_imgsz_960": {
-        "model": "yolo11s.pt",
-        "imgsz": 960,
-        "batch": 8,
-        "epochs": 5,
-    },
-    "test_04_small_model": {
-        "model": "yolo11n.pt",
-        "imgsz": 1024,
-        "batch": 8,
-        "epochs": 5,
-    },
-    "test_05_no_heavy_aug": {
-        "model": "yolo11s.pt",
-        "imgsz": 1024,
-        "batch": 8,
-        "epochs": 5,
-        "degrees": 0.0,
-        "fliplr": 0.0,
-        "flipud": 0.0,
-        "mosaic": 0.0,
-        "mixup": 0.0,
-        "copy_paste": 0.0,
-        "hsv_h": 0.0,
-        "hsv_s": 0.0,
-        "hsv_v": 0.0,
-    },
-}
+EXPERIMENTS_DIR = ROOT / "config" / "experiments"
 
 
 def now_str():
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
+def load_experiment_yaml(exp_name: str) -> dict:
+    """
+    exp_name에 대응하는 YAML 파일을 찾아 로드합니다.
+    예:
+      exp_name = "yolo_mac_baseline"
+      -> config/experiments/yolo_mac_baseline.yaml
+    """
+    yaml_path = EXPERIMENTS_DIR / f"{exp_name}.yaml"
+
+    if not yaml_path.exists():
+        raise FileNotFoundError(f"Experiment yaml not found: {yaml_path}")
+
+    with open(yaml_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+
+    return data
+
+
 def build_experiment_config(exp_name: str) -> dict:
+    """
+    TRAIN 기본값 위에 YAML 실험 설정을 덮어씁니다.
+    """
     cfg = deepcopy(TRAIN)
-    if exp_name not in EXPERIMENTS:
-        raise ValueError(f"Unknown experiment: {exp_name}")
-    cfg.update(EXPERIMENTS[exp_name])
+    yaml_cfg = load_experiment_yaml(exp_name)
+
+    # experiment_name은 실행 설정이 아니라 메타데이터이므로 제거
+    yaml_cfg.pop("experiment_name", None)
+
+    cfg.update(yaml_cfg)
     return cfg
 
 
@@ -99,10 +81,12 @@ def extract_metrics_from_results_csv(results_csv: Path) -> dict:
 
 
 def run_experiment(exp_name: str):
+    yaml_cfg = load_experiment_yaml(exp_name)
     cfg = build_experiment_config(exp_name)
 
+    yaml_experiment_name = yaml_cfg.get("experiment_name", exp_name)
     model_stem = Path(cfg["model"]).stem
-    run_name = f"{exp_name}_{model_stem}_{now_str()}"
+    run_name = f"{yaml_experiment_name}_{model_stem}_{now_str()}"
 
     print(f"\n=== 실험 시작: {run_name} ===")
     print(cfg)
@@ -121,6 +105,7 @@ def run_experiment(exp_name: str):
                 "batch_size": cfg["batch"],
                 "epochs": cfg["epochs"],
                 "lr0": cfg["lr0"],
+                "patience": cfg.get("patience"),
             },
         },
         metrics=metrics,
@@ -151,17 +136,25 @@ def compare_results():
         print(df.sort_values("mAP50", ascending=False).head(5))
 
 
+def list_experiments() -> list[str]:
+    """
+    config/experiments 폴더 안 yaml 파일 목록을 반환합니다.
+    """
+    if not EXPERIMENTS_DIR.exists():
+        return []
+
+    return sorted([p.stem for p in EXPERIMENTS_DIR.glob("*.yaml")])
+
+
 def run_all_experiments():
     """
-    모델 1 빠른 비교용 테스트 5개를 순차 실행합니다.
+    config/experiments 폴더 안의 모든 YAML 실험을 순차 실행합니다.
     """
-    experiment_order = [
-        "test_01_sanity",
-        "test_02_current_short",
-        "test_03_imgsz_960",
-        "test_04_small_model",
-        "test_05_no_heavy_aug",
-    ]
+    experiment_order = list_experiments()
+
+    if not experiment_order:
+        print("실행할 experiment yaml 이 없습니다.")
+        return
 
     for exp_name in experiment_order:
         print(f"\n\n===== {exp_name} 실험 시작 =====")

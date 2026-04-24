@@ -1,0 +1,29 @@
+experiment_name: yolo_mac_aug_moderate
+# 모델 2 기본 대비 증강 강도를 완화한 실험
+
+model: yolo11s.pt
+imgsz: 1280
+batch: 4
+epochs: 150
+patience: 15
+optimizer: SGD
+
+lr0: 0.01
+lrf: 0.01
+momentum: 0.937
+weight_decay: 0.0005
+warmup_epochs: 3
+save_period: 10
+
+cls: 1.5
+
+degrees: 20.0
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.015
+hsv_s: 0.15
+hsv_v: 0.15
+mosaic: 0.5
+mixup: 0.0
+copy_paste: 0.1
+close_mosaic: 10
