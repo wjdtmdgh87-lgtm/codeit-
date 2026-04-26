@@ -120,5 +120,5 @@ python main.py
 ---
 
 <p align="center">
-  Made with ❤️ by HAPPY 6 TEAM
+  Made with ❤️ HAPPY 6 TEAM
 </p>
