@@ -24,12 +24,14 @@ def build_model(nc: int = 56) -> YOLO:
 
 def _run_train(yaml_path: str, run_name: str):
     """학습 실행 공통 함수"""
-    cfg = TRAIN
-
+    cfg    = TRAIN
+    # 1. CUDA(NVIDIA GPU) 확인
     if torch.cuda.is_available():
-        device = "0"
-    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        device = "0"  # 또는 "cuda"
+    # 2. MPS(Apple Silicon GPU) 확인
+    elif torch.backends.mps.is_available():
         device = "mps"
+    # 3. 모두 없으면 CPU
     else:
         device = "cpu"
 
@@ -70,12 +72,14 @@ def _run_train(yaml_path: str, run_name: str):
         verbose       = True,
     )
 
+    # best.pt → models/fold{N}_{model}_best.pt
     best_src = RESULTS_DIR / run_name / "weights" / "best.pt"
     if best_src.exists():
         dst = MODELS_DIR / f"{run_name}_best.pt"
         shutil.copy2(best_src, dst)
         print(f"[저장] {dst.name} → {MODELS_DIR}")
 
+    # fold 간 GPU 메모리 해제
     del model
     gc.collect()
     torch.cuda.empty_cache()
@@ -88,6 +92,7 @@ def train():
     run_name   = f"baseline_{model_stem}"
     _run_train(str(DATASET_YAML), run_name)
 
+    # best.pt → models/best_model.pt 복사
     best_src = RESULTS_DIR / run_name / "weights" / "best.pt"
     if best_src.exists():
         shutil.copy2(best_src, MODELS_DIR / "best_model.pt")
@@ -112,6 +117,7 @@ def train_all_folds(n_folds: int = 5):
         print(f"  Fold {fold} / {n_folds} 학습 시작")
         print(f"{'='*50}")
 
+        # fold별 임시 yaml 생성
         with open(base_yaml, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         data["train"] = f"data/splits/fold{fold}_train_oversampled.txt"
@@ -139,48 +145,43 @@ def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0
     model_stem = Path(TRAIN["model"]).stem
     run_name   = f"predict_{model_stem}"
 
-    # 이미지 목록 수집 (정렬로 순서 보장)
-    src = Path(source)
-    if src.is_dir():
-        img_paths = sorted(
-            list(src.glob("*.png")) +
-            list(src.glob("*.jpg")) +
-            list(src.glob("*.jpeg"))
-        )
-    else:
-        img_paths = [src]
-
-    if not img_paths:
-        print(f"[오류] 이미지 없음: {source}")
-        return
-
-    # predict에 같은 목록 전달 → results 순서 일치 보장
     results = model.predict(
-        img_paths,
-        conf     = conf,
-        iou      = iou,
-        save     = False,
-        verbose  = True,
+        source,
+        conf        = conf,
+        iou         = iou,
+        agnostic_nms= True,   # 클래스와 무관하게 겹치는(IoU 높은) 박스 중 신뢰도가 낮은 것을 제거합니다.
+        project     = str(Path("runs/detect").absolute()),
+        name        = run_name,
+        exist_ok    = False,
+        save        = False,   # OCR 보정 후 저장하므로 False
+        verbose     = True,
     )
 
-    # OCR 매핑 테이블 로드 (use_ocr=False면 빈 dict)
+    # OCR 매핑 테이블 로드
     print_mapping = {}
     if use_ocr:
-        from ocr_correction import build_print_mapping, correct_predictions
-        print_mapping = build_print_mapping()
+        try:
+            from ocr_correction import build_print_mapping, correct_predictions
+            print_mapping = build_print_mapping()
+        except ImportError:
+            print("[경고] ocr_correction 모듈을 찾을 수 없습니다. OCR 보정을 건너뜁니다.")
+            use_ocr = False
 
     # 저장 폴더
-    save_dir = Path("runs/detect") / run_name
+    if results and hasattr(results[0], 'save_dir'):
+        save_dir = Path(results[0].save_dir)
+    else:
+        save_dir = Path("runs/detect") / run_name
     save_dir.mkdir(parents=True, exist_ok=True)
 
     from collections import defaultdict
     class_counts = defaultdict(int)
     class_names  = model.names
 
-    for r, img_path in zip(results, img_paths):
+    for r in results:
+        img_path = Path(r.path)
         img = cv2.imread(str(img_path))
         if img is None:
-            print(f"  건너뜀 (손상): {img_path.name}")
             continue
 
         result = {
@@ -210,6 +211,7 @@ def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0
         print(f"  {class_names[cls_id]:<45} {count}개")
     print(f"\n  총 탐지: {sum(class_counts.values())}개")
     print(f"  탐지된 클래스: {len(class_counts)}종 / {len(class_names)}종")
+    print(f"  저장 위치: {save_dir}")
 
     return results
 

@@ -23,6 +23,7 @@ from pathlib import Path
 from collections import defaultdict
 from PIL import ImageFont, ImageDraw, Image
 
+import gc
 import torch
 from ultralytics import YOLO
 from ensemble_boxes import weighted_boxes_fusion
@@ -238,3 +239,7 @@ def wbf_predict(source: str, conf: float = 0.25, iou: float = 0.45,
     print(f"\n  총 탐지       : {sum(class_counts.values())}개")
     print(f"  탐지된 클래스 : {len(class_counts)}종 / {len(class_names)}종")
     print(f"  저장 위치     : {save_dir}")
+    # 예측 완료 후 GPU 메모리 해제
+    del models
+    gc.collect()
+    torch.cuda.empty_cache()
