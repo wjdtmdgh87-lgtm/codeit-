@@ -3,14 +3,17 @@ src/model.py
 YOLOv8/11 사전 학습 가중치 로드 + nc=56 헤드 교체
 """
 
+import os
 import gc
 import shutil
-import torch
-import cv2
+import tempfile
 from pathlib import Path
-from ultralytics import YOLO
-from config import TRAIN, DATASET_YAML, MODELS_DIR, RESULTS_DIR, ROOT
 
+import torch
+import yaml
+from ultralytics import YOLO
+
+from config import TRAIN, MODELS_DIR, RESULTS_DIR, ROOT, DATASET_VERSION
 
 def build_model(nc: int = 56) -> YOLO:
     """
@@ -21,6 +24,246 @@ def build_model(nc: int = 56) -> YOLO:
     print(f"[모델] {TRAIN['model']} 로드 완료")
     return model
 
+def find_dataset_yaml(version: str) -> Path:
+    """
+    맥/윈도우 공통으로 data.yaml 자동 탐색.
+    우선순위:
+    1) 환경변수 DATASET_YAML
+    2) 홈 디렉토리 아래에서 version 포함 경로 탐색
+       - train/val 실제 존재하는 후보만 채택
+    3) 마지막 fallback으로 프로젝트 내부 data.yaml
+    """
+    env_yaml = os.getenv("DATASET_YAML")
+    if env_yaml:
+        p = Path(env_yaml).expanduser().resolve()
+        if p.exists():
+            print(f"[DATASET] env override: {p}")
+            return p
+
+    search_roots = [
+        Path.home() / "projects",
+        Path.home() / "Downloads",
+        Path.home(),
+    ]
+
+    version_lower = version.lower()
+    candidates = []
+
+    for search_root in search_roots:
+        if not search_root.exists():
+            continue
+
+        for p in search_root.rglob("data.yaml"):
+            sp = str(p).lower()
+            if version_lower not in sp:
+                continue
+
+            score, usable = _score_dataset_yaml(p.resolve(), version_lower)
+            if usable:
+                candidates.append((score, p.resolve()))
+
+    if candidates:
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        best = candidates[0][1]
+        print(f"[DATASET] auto-detected: {best}")
+        return best
+
+    local_yaml = ROOT / "data.yaml"
+    if local_yaml.exists():
+        print(f"[DATASET] local fallback: {local_yaml}")
+        return local_yaml.resolve()
+
+    raise FileNotFoundError(
+        f"Could not find usable data.yaml for dataset version '{version}'. "
+        f"Set DATASET_YAML env var explicitly if needed."
+    )
+
+def _resolve_dataset_entry(dataset_yaml_path: Path, data: dict, key: str) -> Path | None:
+    """
+    data.yaml 안 train/val/test 항목을 실제 경로로 해석한다.
+    """
+    value = data.get(key)
+    if not value:
+        return None
+
+    dataset_root = dataset_yaml_path.parent
+    raw_path = data.get("path")
+    if raw_path:
+        rp = Path(str(raw_path))
+        if rp.is_absolute():
+            dataset_root = rp
+        else:
+            dataset_root = (dataset_yaml_path.parent / rp).resolve()
+
+    p = Path(str(value))
+    if p.is_absolute():
+        return p.resolve()
+
+    return (dataset_root / p).resolve()
+
+
+def _score_dataset_yaml(candidate_yaml: Path, version_lower: str) -> tuple[int, bool]:
+    """
+    data.yaml 후보 점수 계산.
+    - 실제 train/val/test 경로 존재 여부를 검사
+    - usable하지 않으면 선택 대상에서 제외
+    """
+    try:
+        with open(candidate_yaml, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except Exception:
+        return (-9999, False)
+
+    score = 0
+    sp = str(candidate_yaml).lower()
+
+    # 버전 문자열 포함
+    if version_lower in sp:
+        score += 20
+
+    # 패키지 구조 선호
+    parent = candidate_yaml.parent
+    if (parent / "images").exists():
+        score += 10
+    if (parent / "splits").exists():
+        score += 10
+    if (parent / "test_images").exists():
+        score += 10
+
+    # 더 구체적인 패키지 폴더 선호
+    if "모델러_전달_패키지" in str(candidate_yaml):
+        score += 20
+    if "unzipped" in sp:
+        score += 5
+
+    train_path = _resolve_dataset_entry(candidate_yaml, data, "train")
+    val_path = _resolve_dataset_entry(candidate_yaml, data, "val")
+    test_path = _resolve_dataset_entry(candidate_yaml, data, "test")
+
+    usable = True
+
+    # train/val은 반드시 존재해야 함
+    if train_path is None or not train_path.exists():
+        usable = False
+    if val_path is None or not val_path.exists():
+        usable = False
+
+    # test는 없어도 학습 자체는 가능하므로 가산점만
+    if test_path is not None and test_path.exists():
+        score += 5
+
+    # split txt가 실제로 있으면 가산점
+    if train_path is not None and train_path.suffix == ".txt" and train_path.exists():
+        score += 15
+    if val_path is not None and val_path.suffix == ".txt" and val_path.exists():
+        score += 15
+
+    return (score, usable)
+
+def _normalize_split_file(split_file: Path, dataset_root: Path) -> Path:
+    """
+    split txt 안 경로를 절대경로로 정규화한 임시 txt 생성
+    """
+    if not split_file.exists():
+        raise FileNotFoundError(f"split file not found: {split_file}")
+
+    lines = split_file.read_text(encoding="utf-8").splitlines()
+    fixed = []
+
+    for raw in lines:
+        s = raw.strip()
+        if not s:
+            continue
+
+        s = s.replace("\\", "/")
+        p = Path(s)
+
+        if p.is_absolute():
+            fixed.append(str(p))
+            continue
+
+        if s.startswith("./"):
+            s = s[2:]
+
+        if "/images/" in s:
+            filename = s.split("/images/")[-1]
+            fixed.append(str((dataset_root / "images" / filename).resolve()))
+            continue
+
+        if s.startswith("images/"):
+            filename = s.replace("images/", "", 1)
+            fixed.append(str((dataset_root / "images" / filename).resolve()))
+            continue
+
+        if s.startswith("test_images/"):
+            filename = s.replace("test_images/", "", 1)
+            fixed.append(str((dataset_root / "test_images" / filename).resolve()))
+            continue
+
+        fixed.append(str((dataset_root / "images" / s).resolve()))
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="normalized_split_"))
+    out_path = tmp_dir / split_file.name
+    out_path.write_text("\n".join(fixed) + "\n", encoding="utf-8")
+    return out_path
+
+
+def prepare_dataset_yaml(dataset_yaml_path: Path) -> Path:
+    """
+    data.yaml을 현재 OS에서 안전하게 동작하는 임시 normalized yaml로 변환
+    """
+    dataset_yaml_path = dataset_yaml_path.expanduser().resolve()
+
+    if not dataset_yaml_path.exists():
+        raise FileNotFoundError(f"dataset yaml not found: {dataset_yaml_path}")
+
+    with open(dataset_yaml_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+
+    dataset_root = dataset_yaml_path.parent
+
+    raw_path = data.get("path")
+    if raw_path:
+        rp = Path(str(raw_path))
+        if rp.is_absolute():
+            dataset_root = rp
+        else:
+            dataset_root = (dataset_yaml_path.parent / rp).resolve()
+
+    def normalize_entry(value: str) -> str:
+        s = str(value).replace("\\", "/")
+        p = Path(s)
+
+        if p.is_absolute():
+            return str(p)
+
+        if s.endswith(".txt"):
+            split_path = (dataset_root / s).resolve()
+            return str(_normalize_split_file(split_path, dataset_root))
+
+        return str((dataset_root / s).resolve())
+
+    if "train" in data:
+        data["train"] = normalize_entry(data["train"])
+    if "val" in data:
+        data["val"] = normalize_entry(data["val"])
+    if "test" in data:
+        data["test"] = normalize_entry(data["test"])
+
+    data["path"] = "."
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="normalized_yaml_"))
+    out_yaml = tmp_dir / "data.normalized.yaml"
+
+    with open(out_yaml, "w", encoding="utf-8") as f:
+        yaml.dump(data, f, allow_unicode=True, sort_keys=False)
+
+    print(f"[DATASET] normalized yaml: {out_yaml}")
+    print(f"[DATASET] train: {data.get('train')}")
+    print(f"[DATASET] val: {data.get('val')}")
+    print(f"[DATASET] test: {data.get('test')}")
+
+    return out_yaml
 
 def _run_train(yaml_path: str, run_name: str):
     """학습 실행 공통 함수"""
@@ -87,14 +330,18 @@ def _run_train(yaml_path: str, run_name: str):
 
 def train():
     """data.yaml 기준 단일 학습 (fold 1 기본)"""
-    cfg        = TRAIN
+    cfg = TRAIN
     model_stem = Path(cfg["model"]).stem
-    run_name   = f"baseline_{model_stem}"
-    _run_train(str(DATASET_YAML), run_name)
+    run_name = f"baseline_{model_stem}"
 
-    # best.pt → models/best_model.pt 복사
+    detected_yaml = find_dataset_yaml(DATASET_VERSION)
+    normalized_yaml = prepare_dataset_yaml(detected_yaml)
+
+    _run_train(str(normalized_yaml), run_name)
+
     best_src = RESULTS_DIR / run_name / "weights" / "best.pt"
     if best_src.exists():
+        MODELS_DIR.mkdir(parents=True, exist_ok=True)
         shutil.copy2(best_src, MODELS_DIR / "best_model.pt")
         print(f"[저장] best_model.pt → {MODELS_DIR}")
 
