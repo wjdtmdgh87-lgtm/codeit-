@@ -5,8 +5,8 @@ main.py  ← project_root/ 에 위치해야 합니다.
   python main.py --mode data       # 데이터 경로 수정 + 통계 출력
   python main.py --mode train      # fold 1 단일 학습
   python main.py --mode train_all  # fold 1~5 전체 자동 학습
-  python main.py --mode predict    # 단일 모델 예측  (--source 필수)
-  python main.py --mode wbf        # 5-Fold WBF 앙상블 예측  (--source 필수)
+  python main.py --mode predict --source data/images/test  # 단일 모델 예측  (--source 필수)
+  python main.py --mode wbf --source data/images/test       # 5-Fold WBF 앙상블 예측  (--source 필수)
   python main.py --mode all        # data + train 순서대로
 """
 
