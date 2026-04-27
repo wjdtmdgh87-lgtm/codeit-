@@ -8,7 +8,7 @@ src/dataset.py
   - data/splits/ 에 최종 txt 저장
 
 사용법:
-  python dataset.py --input data/splits/fold1_train_oversampled.txt
+  python dataset.py --input data/splits/fold1_train.txt
   python dataset.py  # splits/ 폴더 전체 처리
 """
 
