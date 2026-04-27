@@ -132,6 +132,12 @@ def find_dataset_yaml(version: str) -> Path:
         if p.exists():
             print(f"[DATASET] env override: {p}")
             return p
+         
+        # Desktop
+        # projects
+        # Downloads
+        # 홈 디렉토리
+        # 여기 중 하나에 있기만 하면 찾아줌 알아서
 
     search_roots = [
         Path.home() / "Desktop",
