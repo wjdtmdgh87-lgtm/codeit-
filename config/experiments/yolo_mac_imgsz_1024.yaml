@@ -1,22 +1,17 @@
 experiment_name: yolo_mac_imgsz_1024
-# 입력 해상도를 1280에서 1024로 낮춰 비교하는 실험
-
 model: yolo11s.pt
 imgsz: 1024
 batch: 4
 epochs: 150
 patience: 15
 optimizer: SGD
-
 lr0: 0.01
 lrf: 0.01
 momentum: 0.937
 weight_decay: 0.0005
 warmup_epochs: 3
 save_period: 10
-
 cls: 1.5
-
 degrees: 90.0
 fliplr: 0.5
 flipud: 0.5
