@@ -120,13 +120,10 @@ def _score_dataset_yaml(candidate_yaml: Path, version_lower: str) -> tuple[int, 
 
 def find_dataset_yaml(version: str) -> Path:
     """
-    맥/윈도우 공통으로 data.yaml 자동 탐색.
-
+    파일 이름/경로 문자열만 기준으로 data.yaml 자동 탐색.
     우선순위:
     1) 환경변수 DATASET_YAML
-    2) Desktop / projects / Downloads / home 아래의 모든 data.yaml 탐색
-       - 실제 train/val이 존재하는 usable 후보만 채택
-       - version 문자열, Desktop, 모델러_전달_패키지, unzipped, v9_2 등에 가산점
+    2) Desktop / projects / Downloads / home 아래에서 version 문자열이 포함된 data.yaml
     3) 마지막 fallback으로 프로젝트 내부 data.yaml
     """
     env_yaml = os.getenv("DATASET_YAML")
@@ -142,6 +139,26 @@ def find_dataset_yaml(version: str) -> Path:
         Path.home() / "Downloads",
         Path.home(),
     ]
+
+    version_lower = version.lower()
+
+    for search_root in search_roots:
+        if not search_root.exists():
+            continue
+
+        for p in search_root.rglob("data.yaml"):
+            if version_lower in str(p).lower():
+                print(f"[DATASET] auto-detected: {p.resolve()}")
+                return p.resolve()
+
+    local_yaml = ROOT / "data.yaml"
+    if local_yaml.exists():
+        print(f"[DATASET] local fallback: {local_yaml}")
+        return local_yaml.resolve()
+
+    raise FileNotFoundError(
+        f"Could not find data.yaml for dataset version '{version}'."
+    )
 
     version_lower = version.lower()
     candidates = []
