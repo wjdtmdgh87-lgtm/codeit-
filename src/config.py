@@ -22,7 +22,7 @@ IMG_W, IMG_H  = 976, 1280
 
 # ── 학습 하이퍼파라미터 ────────────────────────
 TRAIN = dict(
-    model         = "yolo11s.pt",
+    model         = "yolo12s.pt",
     imgsz         = 1280,
     batch         = 4,
     epochs        = 150,
