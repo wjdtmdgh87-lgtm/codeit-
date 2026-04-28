@@ -25,7 +25,7 @@ TRAIN = dict(
     model         = "yolo11s.pt",
     imgsz         = 1280,
     batch         = 4,
-    epochs        = 10,
+    epochs        = 150,
     optimizer     = "SGD",
     lr0           = 0.01,
     lrf           = 0.01,
@@ -41,10 +41,10 @@ TRAIN = dict(
     hsv_h         = 0.015,
     hsv_s         = 0.2,
     hsv_v         = 0.2,
-    mosaic        = 1.0,
-    mixup         = 0.1,
+    mosaic        = 0.8,
+    mixup         = 0.05,
     copy_paste    = 0.5,
-    close_mosaic = 15, # 마지막 15 epoch는 mosaic 없이 학습
+    close_mosaic = 30, # 마지막 15 epoch는 mosaic 없이 학습
 )
 
 # ── K-Fold ─────────────────────────────────────
