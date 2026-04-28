@@ -34,13 +34,15 @@ CONFUSING_CLASSES = {
     7,   # 에어탈정(아세클로페낙)
     10,  # 다보타민큐정 10mg/병
     11,  # 써스펜8시간이알서방정 650mg
+    14,  # 크레스토정 20mg
     25,  # 플라빅스정 75mg
+    26,  # 엑스포지정 5/160mg
     30,  # 자누비아정 50mg
-    33,  # 자누메트정 50/850mg
     40,  # 트라젠타정(리나글립틴)
     51,  # 제미메트서방정 50/1000mg
     53,  # 로수젯정10/5밀리그램
-    60   # 세비카정10/40mg (트라젠타정 오탐 방지)
+    60,  # 세비카정10/40mg (트라젠타정 오탐 방지)
+    61,  # 쎄로켈정100mg (SEROQUEL100)
 }
 
 _ocr_reader = None  # 전역 싱글턴 — 최초 1회만 로드
@@ -96,40 +98,41 @@ def build_print_mapping(csv_path=None) -> dict:
 
 def _preprocess_for_ocr(img_crop):
     """
-    알약 각인 타입(음각/양각/노이즈)에 대응한 전처리 변형 3개를 반환합니다.
-
-    반환:
-      [v1, v2, v3]
-        v1 — CLAHE + 언샤프 마스킹  (음각 각인 기본)
-        v2 — 반전 + CLAHE + 언샤프  (양각 각인, 밝은 배경에 어두운 글자)
-        v3 — 바이래터럴 필터 + CLAHE (표면 노이즈가 심한 경우)
+    OCR 인식률 향상을 위한 4가지 전처리 버전 생성
     """
+    # 그레이스케일 변환
     if len(img_crop.shape) == 3:
         gray = cv2.cvtColor(img_crop, cv2.COLOR_BGR2GRAY)
     else:
         gray = img_crop.copy()
 
-    # 소형 각인 업스케일링 — 짧은 변을 MIN_CROP_PX 이상으로 보장
+    # 최소 크기(MIN_CROP_PX) 미만일 경우 업스케일링
     h, w = gray.shape
     if min(h, w) < MIN_CROP_PX:
         scale = MIN_CROP_PX / min(h, w)
-        gray = cv2.resize(gray, None, fx=scale, fy=scale,
-                          interpolation=cv2.INTER_CUBIC)
+        gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
 
-    # 타일 크기를 작게 설정해 소형 크롭에서도 국소 대비 향상 효과 극대화
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(4, 4))
+    clahe_wide  = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(4, 4))
+    clahe_tight = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(2, 2))  # 타이트 타일로 국소 대비 강화
 
     def unsharp(img, sigma=2.0, strength=1.8):
-        """언샤프 마스킹: 각인 경계를 선명화."""
         blur = cv2.GaussianBlur(img, (0, 0), sigma)
         return cv2.addWeighted(img, strength, blur, -(strength - 1), 0)
 
-    v1 = unsharp(clahe.apply(gray))                                          # 음각 기본
-    v2 = unsharp(clahe.apply(cv2.bitwise_not(gray)))                         # 양각 대응
-    denoised = cv2.bilateralFilter(gray, d=9, sigmaColor=75, sigmaSpace=75)
-    v3 = clahe.apply(denoised)                                               # 노이즈 제거
+    # v1: 표준 음각 (CLAHE + Unsharp)
+    v1 = unsharp(clahe_wide.apply(gray))
 
-    return [v1, v2, v3]
+    # v2: 양각 및 반전 대비 (Invert + CLAHE + Unsharp)
+    v2 = unsharp(clahe_wide.apply(cv2.bitwise_not(gray)))
+
+    # v3: 노이즈 제거 (Bilateral Filter + CLAHE)
+    denoised = cv2.bilateralFilter(gray, d=9, sigmaColor=75, sigmaSpace=75)
+    v3 = clahe_wide.apply(denoised)
+
+    # v4: 타이트 CLAHE — 각인 부위의 매우 국소적인 명암 차이 강조
+    v4 = unsharp(clahe_tight.apply(gray))
+
+    return [v1, v2, v3, v4]
 
 
 def read_text_from_crop(img_crop) -> list:
@@ -151,9 +154,11 @@ def read_text_from_crop(img_crop) -> list:
                 variant,
                 detail=1,
                 rotation_info=ROTATION_ANGLES,
-                mag_ratio=1.5,
-                contrast_ths=0.1,   # 미세 각인도 검출하도록 임계값 완화
+                mag_ratio=2.0,          # 1.5 → 2.0: 입력 확대로 문자 인식률 향상
+                contrast_ths=0.1,
                 adjust_contrast=0.8,
+                text_threshold=0.5,     # 기본값 0.7 → 낮춰서 저대비 각인 탐지
+                low_text=0.3,           # 기본값 0.4 → 낮춰서 흐린 글자도 탐지
             )
         except Exception:
             continue
@@ -188,11 +193,17 @@ def _find_match(ocr_norm: str, mapping: dict, yolo_label: int = None):
     if ocr_norm in mapping:
         return _resolve(mapping[ocr_norm])
 
-    # 2) 부분 일치 — OCR 결과가 3자 이상일 때만 허용 (짧은 숫자 조합 오매핑 방지)
-    if len(ocr_norm) >= 3:
+    # 2) 부분 일치 — OCR 결과가 매핑 키의 부분 문자열인 경우만 허용 (5자 이상)
+    #   · ocr_norm in key : OCR이 각인 일부만 읽은 경우
+    #                       예) OCR="TYLEN",    key="TYLENOL"    → 허용
+    #                       예) OCR="SEROQUEL", key="SEROQUEL100" → 허용
+    #   · key in ocr_norm 방향은 허용하지 않음
+    #     매핑 코드가 OCR 결과보다 짧으면 노이즈·오탐으로 간주
+    #                       예) OCR="ZD4522200", key="ZD452220" → 차단
+    if len(ocr_norm) >= 5:
         hits = []
         for key, candidates in mapping.items():
-            if ocr_norm in key or key in ocr_norm:
+            if ocr_norm in key:
                 hits.extend(candidates)
         if hits:
             return _resolve(list(dict.fromkeys(hits)))
@@ -265,29 +276,30 @@ def correct_predictions(
         # 앞뒤 결과를 합치면 "3"+"0"→"30" 같은 오매핑 발생하므로 개별 탐색
         matched_class    = None
         matched_ocr_conf = 0.0
+        matched_text     = ""
         for text, ocr_conf in ocr_results:
             candidate = _find_match(_normalize(str(text)), print_mapping, yolo_label=label)
             if candidate is not None:
                 matched_class    = candidate
                 matched_ocr_conf = float(ocr_conf)
+                matched_text     = str(text)
                 break
 
         if matched_class is None:
             continue
 
         # ── OCR 매핑 성공 → 클래스·신뢰도를 OCR 결과로 교체 ──
-        ocr_str   = ", ".join(str(t) for t, _ in ocr_results[:3])
         orig_name = class_names.get(label, f"cls_{label}")
         new_name  = class_names.get(matched_class, f"cls_{matched_class}")
         prefix    = f"({img_name}) " if img_name else ""
 
         if matched_class != label:
             print(f"  [OCR 보정] {prefix}{orig_name} → {new_name} "
-                  f"(각인: {ocr_str}) conf {score:.2f} → {matched_ocr_conf:.2f}")
+                  f"(각인: {matched_text}) conf {score:.2f} → {matched_ocr_conf:.2f}")
             labels[i] = matched_class
         elif score < OCR_TRIGGER_CONF:
             print(f"  [OCR 확인] {prefix}{orig_name} 일치 "
-                  f"(각인: {ocr_str}) conf {score:.2f} → {matched_ocr_conf:.2f}")
+                  f"(각인: {matched_text}) conf {score:.2f} → {matched_ocr_conf:.2f}")
 
         scores[i] = matched_ocr_conf
 
