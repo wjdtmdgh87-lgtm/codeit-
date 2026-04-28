@@ -33,9 +33,9 @@ def fix_path(line: str) -> str:
     p = Path(line.strip())
     parts = p.parts
 
-    # 이미 train/ 포함 → 그대로
+    # 이미 train/ 포함 → 슬래시 정규화 후 반환 (Windows 백슬래시 대응)
     if "train" in parts:
-        return line.strip()
+        return line.strip().replace("\\", "/")
 
     # ./images/K-... 또는 data/images/K-... 형태
     fname = p.name
