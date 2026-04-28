@@ -1,6 +1,6 @@
 """
 src/model.py
-YOLOv8/11 사전 학습 가중치 로드 + nc=56 헤드 교체
+YOLOv8/11 사전 학습 가중치 로드 + nc=56 or 71 헤드 교체
 """
 
 import gc
@@ -12,7 +12,7 @@ from ultralytics import YOLO
 from config import TRAIN, DATASET_YAML, MODELS_DIR, RESULTS_DIR, ROOT
 
 
-def build_model(nc: int = 56) -> YOLO:
+def build_model(nc: int = 71) -> YOLO:
     """
     YOLO 모델 가중치를 불러옵니다.
     클래스 개수(nc)에 따른 헤드 교체는 YOLO.train() 시 data.yaml을 읽고 자동으로 수행됩니다.
@@ -29,7 +29,7 @@ def _run_train(yaml_path: str, run_name: str):
     if torch.cuda.is_available():
         device = "0"  # 또는 "cuda"
     # 2. MPS(Apple Silicon GPU) 확인
-    elif torch.backends.mps.is_available():
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():  # 수정
         device = "mps"
     # 3. 모두 없으면 CPU
     else:
@@ -39,7 +39,7 @@ def _run_train(yaml_path: str, run_name: str):
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-    model = build_model(nc=56)
+    model = build_model(nc=71)
     model.train(
         data          = yaml_path,
         project       = str(RESULTS_DIR),
@@ -82,7 +82,8 @@ def _run_train(yaml_path: str, run_name: str):
     # fold 간 GPU 메모리 해제
     del model
     gc.collect()
-    torch.cuda.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def train():
@@ -120,7 +121,7 @@ def train_all_folds(n_folds: int = 5):
         # fold별 임시 yaml 생성
         with open(base_yaml, encoding="utf-8") as f:
             data = yaml.safe_load(f)
-        data["train"] = f"data/splits/fold{fold}_train_oversampled.txt"
+        data["train"] = f"data/splits/fold{fold}_train.txt"
         data["val"]   = f"data/splits/fold{fold}_val.txt"
         tmp_yaml = ROOT / f"data_fold{fold}.yaml"
         with open(tmp_yaml, "w", encoding="utf-8") as f:
@@ -148,7 +149,7 @@ def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0
     results = model.predict(
         source,
         conf        = conf,
-        iou         = iou,
+        iou         = 0.25,   # 박스 겹침 허용도를 낮춰서(0.45->0.25) 중복 박스를 강하게 제거
         agnostic_nms= True,   # 클래스와 무관하게 겹치는(IoU 높은) 박스 중 신뢰도가 낮은 것을 제거합니다.
         project     = str(Path("runs/detect").absolute()),
         name        = run_name,
@@ -194,9 +195,13 @@ def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0
         h, w = r.orig_shape
         result["boxes"] = [[x1/w, y1/h, x2/w, y2/h] for x1, y1, x2, y2 in result["boxes"]]
 
+        # 이미지 꼭지점 접면 오탐 제거
+        from wbf_ensemble import filter_corner_boxes
+        result = filter_corner_boxes(result, img_h=h, img_w=w)
+
         # OCR 보정
         if use_ocr and print_mapping:
-            result = correct_predictions(img, result, class_names, print_mapping, conf_thr=conf)
+            result = correct_predictions(img, result, class_names, print_mapping, conf_thr=conf, img_name=img_path.name)
 
         for label in result["labels"]:
             class_counts[label] += 1
@@ -217,4 +222,4 @@ def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0
 
 
 if __name__ == "__main__":
-    build_model(nc=56)
+    build_model(nc=71)
