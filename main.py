@@ -23,7 +23,9 @@ def main():
     parser.add_argument("--source",  default=None, help="predict/wbf 모드 시 이미지 경로")
     parser.add_argument("--weights", default=None, help="predict 모드 시 가중치 경로")
     parser.add_argument("--conf",    type=float, default=0.25)
+    parser.add_argument("--no-ocr",  action="store_true", help="OCR 각인 보정 비활성화")
     args = parser.parse_args()
+    use_ocr = not args.no_ocr
 
     if args.mode in ("data", "all"):
         from dataset import build
@@ -46,7 +48,7 @@ def main():
             return
         from model import predict
         print("\n=== 예측 ===")
-        predict(args.source, weights=args.weights, conf=args.conf)
+        predict(args.source, weights=args.weights, conf=args.conf, use_ocr=use_ocr)
 
     if args.mode == "wbf":
         if not args.source:
@@ -54,7 +56,7 @@ def main():
             return
         from wbf_ensemble import wbf_predict
         print("\n=== WBF 앙상블 예측 ===")
-        wbf_predict(args.source, conf=args.conf)
+        wbf_predict(args.source, conf=args.conf, use_ocr=use_ocr)
 
 
 if __name__ == "__main__":
