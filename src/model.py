@@ -138,7 +138,8 @@ def train_all_folds(n_folds: int = 5):
         print(f"  {f.name}")
 
 
-def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0.45, use_ocr: bool = True):
+def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0.45,
+            use_ocr: bool = True, use_stage2: bool = True):
     """학습된 모델로 예측합니다."""
     w     = weights or str(MODELS_DIR / "best_model.pt")
     model = YOLO(w)
@@ -149,14 +150,28 @@ def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0
     results = model.predict(
         source,
         conf        = conf,
-        iou         = 0.25,   # 박스 겹침 허용도를 낮춰서(0.45->0.25) 중복 박스를 강하게 제거
-        agnostic_nms= True,   # 클래스와 무관하게 겹치는(IoU 높은) 박스 중 신뢰도가 낮은 것을 제거합니다.
+        iou         = 0.25,
+        agnostic_nms= True,
         project     = str(Path("runs/detect").absolute()),
         name        = run_name,
         exist_ok    = False,
-        save        = False,   # OCR 보정 후 저장하므로 False
+        save        = False,
         verbose     = True,
     )
+
+    # Stage 2 모델 로드
+    stage2_model = None
+    idx_to_class = None
+    if use_stage2:
+        try:
+            from crop_classifier import load_stage2_model, apply_stage2
+            stage2_model, idx_to_class = load_stage2_model()
+        except FileNotFoundError as e:
+            print(f"[경고] {e}")
+            use_stage2 = False
+        except ImportError:
+            print("[경고] crop_classifier 모듈을 찾을 수 없습니다. Stage 2를 건너뜁니다.")
+            use_stage2 = False
 
     # OCR 매핑 테이블 로드
     print_mapping = {}
@@ -196,8 +211,15 @@ def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0
         result["boxes"] = [[x1/w, y1/h, x2/w, y2/h] for x1, y1, x2, y2 in result["boxes"]]
 
         # 이미지 꼭지점 접면 오탐 제거
-        from wbf_ensemble import filter_corner_boxes
+        from wbf_ensemble import filter_corner_boxes, filter_overlapping_boxes
         result = filter_corner_boxes(result, img_h=h, img_w=w)
+
+        # 클래스 무관 중복 박스 제거
+        result = filter_overlapping_boxes(result, iou_thr=0.45)
+
+        # Stage 2: crop 분류기로 저신뢰도 박스 재분류
+        if use_stage2 and stage2_model is not None:
+            result = apply_stage2(img, result, stage2_model, idx_to_class, img_name=img_path.name, class_names=class_names)
 
         # OCR 보정
         if use_ocr and print_mapping:
