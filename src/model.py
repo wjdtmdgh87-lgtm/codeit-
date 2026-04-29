@@ -191,8 +191,11 @@ def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0
     save_dir.mkdir(parents=True, exist_ok=True)
 
     from collections import defaultdict
-    class_counts = defaultdict(int)
-    class_names  = model.names
+    from wbf_ensemble import filter_corner_boxes, filter_overlapping_boxes, draw_result, build_category_mapping, save_submission_csv
+    class_counts     = defaultdict(int)
+    class_names      = model.names
+    all_detections   = []
+    category_mapping = build_category_mapping()
 
     for r in results:
         img_path = Path(r.path)
@@ -211,7 +214,6 @@ def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0
         result["boxes"] = [[x1/w, y1/h, x2/w, y2/h] for x1, y1, x2, y2 in result["boxes"]]
 
         # 이미지 꼭지점 접면 오탐 제거
-        from wbf_ensemble import filter_corner_boxes, filter_overlapping_boxes
         result = filter_corner_boxes(result, img_h=h, img_w=w)
 
         # 클래스 무관 중복 박스 제거
@@ -228,8 +230,13 @@ def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0
         for label in result["labels"]:
             class_counts[label] += 1
 
+        try:
+            image_id = int(img_path.stem)
+        except ValueError:
+            image_id = img_path.stem
+        all_detections.append((image_id, w, h, result))
+
         # 이미지 저장
-        from wbf_ensemble import draw_result
         img_draw = draw_result(img.copy(), result, class_names, conf_thr=conf)
         cv2.imwrite(str(save_dir / img_path.name), img_draw)
 
@@ -239,6 +246,8 @@ def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0
     print(f"\n  총 탐지: {sum(class_counts.values())}개")
     print(f"  탐지된 클래스: {len(class_counts)}종 / {len(class_names)}종")
     print(f"  저장 위치: {save_dir}")
+
+    save_submission_csv(all_detections, save_dir, category_mapping=category_mapping)
 
     return results
 

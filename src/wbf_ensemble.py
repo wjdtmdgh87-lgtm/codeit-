@@ -28,7 +28,60 @@ import torch
 from ultralytics import YOLO
 from ensemble_boxes import weighted_boxes_fusion
 
-from config import MODELS_DIR, RESULTS_DIR, TRAIN
+from config import MODELS_DIR, RESULTS_DIR, TRAIN, ROOT
+
+
+def build_category_mapping(csv_path=None) -> dict:
+    """code_mapping.csv에서 {class_idx: category_id} 매핑 반환. K-001900 → 1900."""
+    import csv as _csv
+    path = Path(csv_path) if csv_path else ROOT / "code_mapping.csv"
+    mapping = {}
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        for row in _csv.DictReader(f):
+            idx = int(row["class_idx"])
+            mapping[idx] = int(row["k_code"].replace("K-", "").lstrip("0") or "0")
+    return mapping
+
+
+def save_submission_csv(
+    detections: list,
+    save_dir: Path,
+    filename: str = "submission.csv",
+    category_mapping: dict = None,
+) -> Path:
+    """
+    submission 형식 CSV 저장.
+
+    detections: [(image_id, img_w, img_h, result_dict), ...]
+      result_dict: {"boxes": [[x1n,y1n,x2n,y2n],...], "scores":[...], "labels":[...]}
+      박스 좌표는 0~1 정규화값 → 픽셀 x,y,w,h 로 변환
+    """
+    import csv as _csv
+    if category_mapping is None:
+        category_mapping = build_category_mapping()
+
+    out_path = save_dir / filename
+    ann_id   = 1
+    with open(out_path, "w", newline="", encoding="utf-8") as f:
+        writer = _csv.writer(f)
+        writer.writerow(["annotation_id", "image_id", "category_id",
+                         "bbox_x", "bbox_y", "bbox_w", "bbox_h", "score"])
+        for image_id, img_w, img_h, result in detections:
+            for box, score, label in zip(result["boxes"], result["scores"], result["labels"]):
+                x1n, y1n, x2n, y2n = box
+                writer.writerow([
+                    ann_id,
+                    image_id,
+                    category_mapping.get(label, label),
+                    round(x1n * img_w),
+                    round(y1n * img_h),
+                    round((x2n - x1n) * img_w),
+                    round((y2n - y1n) * img_h),
+                    round(score, 4),
+                ])
+                ann_id += 1
+    print(f"[제출] {out_path.name}  ({ann_id - 1}개 검출) → {save_dir}")
+    return out_path
 
 
 def get_fold_models() -> list:
@@ -369,7 +422,9 @@ def wbf_predict(source: str, conf: float = 0.25, iou: float = 0.45,
     print(f"  wbf_iou   : {wbf_iou}")
     print(f"  저장 위치 : {save_dir}\n")
 
-    class_counts = defaultdict(int)
+    class_counts    = defaultdict(int)
+    all_detections  = []  # [(image_id, img_w, img_h, result), ...]
+    category_mapping = build_category_mapping()
 
     # 모델별로 전체 이미지를 한 번에 배치 예측 — YOLO 내부 배치 처리 활용
     print("[WBF 앙상블] 모델별 배치 예측 중...")
@@ -418,6 +473,12 @@ def wbf_predict(source: str, conf: float = 0.25, iou: float = 0.45,
         for label in result["labels"]:
             class_counts[label] += 1
 
+        try:
+            image_id = int(img_path.stem)
+        except ValueError:
+            image_id = img_path.stem
+        all_detections.append((image_id, w, h, result))
+
         img_draw = draw_result(img.copy(), result, class_names, conf_thr=conf)
         cv2.imwrite(str(save_dir / img_path.name), img_draw)
 
@@ -433,6 +494,8 @@ def wbf_predict(source: str, conf: float = 0.25, iou: float = 0.45,
     print(f"\n  총 탐지       : {sum(class_counts.values())}개")
     print(f"  탐지된 클래스 : {len(class_counts)}종 / {len(class_names)}종")
     print(f"  저장 위치     : {save_dir}")
+
+    save_submission_csv(all_detections, save_dir, category_mapping=category_mapping)
     # 예측 완료 후 GPU 메모리 해제
     del models
     gc.collect()
