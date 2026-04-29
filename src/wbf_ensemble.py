@@ -140,6 +140,60 @@ def filter_corner_boxes(
     return kept
 
 
+def _box_iou(b1: list, b2: list) -> float:
+    """두 정규화 bbox의 IoU 계산"""
+    ix1 = max(b1[0], b2[0])
+    iy1 = max(b1[1], b2[1])
+    ix2 = min(b1[2], b2[2])
+    iy2 = min(b1[3], b2[3])
+    inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+    if inter == 0.0:
+        return 0.0
+    area1 = (b1[2] - b1[0]) * (b1[3] - b1[1])
+    area2 = (b2[2] - b2[0]) * (b2[3] - b2[1])
+    return inter / (area1 + area2 - inter)
+
+
+def filter_overlapping_boxes(result: dict, iou_thr: float = 0.45) -> dict:
+    """
+    클래스와 무관하게 겹치는 박스를 제거합니다 (class-agnostic greedy NMS).
+
+    WBF는 같은 클래스 박스만 합산하므로, 동일 알약이 서로 다른 클래스로
+    중복 탐지되거나 같은 클래스로 두 번 탐지된 박스가 남을 수 있습니다.
+    score 내림차순으로 정렬 후 IoU > iou_thr 인 하위 박스를 제거합니다.
+    """
+    boxes  = result["boxes"]
+    scores = result["scores"]
+    labels = result["labels"]
+
+    if len(boxes) == 0:
+        return result
+
+    order = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+    suppressed = set()
+
+    for i, idx in enumerate(order):
+        if idx in suppressed:
+            continue
+        for jdx in order[i + 1:]:
+            if jdx in suppressed:
+                continue
+            iou = _box_iou(boxes[idx], boxes[jdx])
+            if iou > iou_thr:
+                print(f"  [중복필터] 제거: cls={labels[jdx]} conf={scores[jdx]:.2f} "
+                      f"(IoU={iou:.2f} with cls={labels[idx]})")
+                suppressed.add(jdx)
+
+    kept = {"boxes": [], "scores": [], "labels": []}
+    for idx in order:
+        if idx not in suppressed:
+            kept["boxes"].append(boxes[idx])
+            kept["scores"].append(scores[idx])
+            kept["labels"].append(labels[idx])
+
+    return kept
+
+
 def get_korean_font(size: int = 28) -> ImageFont.FreeTypeFont:
     """OS별 한글 폰트 자동 탐색"""
     system     = platform.system()
@@ -252,19 +306,34 @@ def draw_result(img: np.ndarray, result: dict, class_names: dict, conf_thr: floa
 
 
 def wbf_predict(source: str, conf: float = 0.25, iou: float = 0.45,
-                wbf_iou: float = 0.5, use_ocr: bool = True):
+                wbf_iou: float = 0.5, use_ocr: bool = True, use_stage2: bool = True):
     """
     5-Fold WBF 앙상블 예측 메인 함수
 
-    source  : 이미지 경로 또는 폴더 경로
-    conf    : 개별 모델 신뢰도 임계값
-    iou     : 개별 모델 NMS IoU
-    wbf_iou : WBF 합산 IoU 임계값
-    use_ocr : True이면 WBF 결과에 EasyOCR 각인 보정 적용
+    source     : 이미지 경로 또는 폴더 경로
+    conf       : 개별 모델 신뢰도 임계값
+    iou        : 개별 모델 NMS IoU
+    wbf_iou    : WBF 합산 IoU 임계값
+    use_ocr    : True이면 WBF 결과에 EasyOCR 각인 보정 적용
+    use_stage2 : True이면 Stage 2 crop 분류기 보정 적용
     """
     weight_paths = get_fold_models()
     models       = [YOLO(w) for w in weight_paths]
     class_names  = models[0].names
+
+    # Stage 2 모델 로드 (이미지 루프 전 1회)
+    stage2_model = None
+    idx_to_class = None
+    if use_stage2:
+        try:
+            from crop_classifier import load_stage2_model, apply_stage2
+            stage2_model, idx_to_class = load_stage2_model()
+        except FileNotFoundError as e:
+            print(f"[경고] {e}")
+            use_stage2 = False
+        except ImportError:
+            print("[경고] crop_classifier 모듈을 찾을 수 없습니다. Stage 2를 건너뜁니다.")
+            use_stage2 = False
 
     # OCR 매핑 테이블 로드 (이미지 루프 전 1회)
     print_mapping = {}
@@ -302,21 +371,45 @@ def wbf_predict(source: str, conf: float = 0.25, iou: float = 0.45,
 
     class_counts = defaultdict(int)
 
+    # 모델별로 전체 이미지를 한 번에 배치 예측 — YOLO 내부 배치 처리 활용
+    print("[WBF 앙상블] 모델별 배치 예측 중...")
+    str_paths = [str(p) for p in img_paths]
+    per_model_preds = []
+    for m_idx, m in enumerate(models, 1):
+        raw = m.predict(str_paths, conf=conf, iou=iou, verbose=False, save=False)
+        fold_preds = []
+        for r in raw:
+            if len(r.boxes) == 0:
+                fold_preds.append({"boxes": [], "scores": [], "labels": []})
+                continue
+            h, w = r.orig_shape
+            fold_preds.append({
+                "boxes":  [[b[0]/w, b[1]/h, b[2]/w, b[3]/h] for b in r.boxes.xyxy.tolist()],
+                "scores": [float(c) for c in r.boxes.conf.tolist()],
+                "labels": [int(c) for c in r.boxes.cls.tolist()],
+            })
+        per_model_preds.append(fold_preds)
+        print(f"  fold {m_idx}/{len(models)} 완료")
+
     for idx, img_path in enumerate(img_paths, 1):
         img = cv2.imread(str(img_path))
         if img is None:
             print(f"  [{idx}/{len(img_paths)}] 건너뜀 (손상): {img_path.name}")
             continue
 
-        all_preds = [
-            predict_single(m, str(img_path), conf=conf, iou=iou)
-            for m in models
-        ]
+        all_preds = [per_model_preds[m_idx][idx - 1] for m_idx in range(len(models))]
         result = run_wbf(all_preds, iou_thr=wbf_iou)
 
         # 이미지 꼭지점 접면 오탐 제거
         h, w = img.shape[:2]
         result = filter_corner_boxes(result, img_h=h, img_w=w)
+
+        # 클래스 무관 중복 박스 제거 (동일·다른 클래스 모두)
+        result = filter_overlapping_boxes(result, iou_thr=0.45)
+
+        # Stage 2: crop 분류기로 저신뢰도 박스 재분류
+        if use_stage2 and stage2_model is not None:
+            result = apply_stage2(img, result, stage2_model, idx_to_class, img_name=img_path.name, class_names=class_names)
 
         # OCR 각인 보정
         if use_ocr and print_mapping:
