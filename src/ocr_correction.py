@@ -23,26 +23,25 @@ import torch
 
 from config import ROOT
 
-OCR_TRIGGER_CONF = 0.70  # 이 미만 박스만 OCR 적용
+OCR_TRIGGER_CONF = 0.85  # 이 미만 박스만 OCR 적용 (Stage 2 bypass 임계값과 동일)
 CROP_PAD         = 0.15  # bbox 크롭 시 가로·세로 패딩 비율
 ROTATION_ANGLES  = [90, 180, 270]  # 각인 방향 탐색 (0°는 EasyOCR 기본)
 MIN_CROP_PX      = 128   # 업스케일 보장 최소 변 길이
 
 # 자주 헷갈리는 알약 클래스 ID 목록 (신뢰도 무관하게 무조건 OCR 실행)
 CONFUSING_CLASSES = {
-    4,   # 무코스타정(레바미피드)(비매품)
+
     7,   # 에어탈정(아세클로페낙)
-    10,  # 다보타민큐정 10mg/병
     11,  # 써스펜8시간이알서방정 650mg
     14,  # 크레스토정 20mg
-    25,  # 플라빅스정 75mg
-    26,  # 엑스포지정 5/160mg
+    23,  # 노바스크정 5mg
+    27,  # 아토르바정 10mg
     30,  # 자누비아정 50mg
     40,  # 트라젠타정(리나글립틴)
+    44,  # 트라젠타듀오정 2.5/850mg
+    45,  # 아질렉트정(라사길린메실산염)
     51,  # 제미메트서방정 50/1000mg
     53,  # 로수젯정10/5밀리그램
-    60,  # 세비카정10/40mg (트라젠타정 오탐 방지)
-    61,  # 쎄로켈정100mg (SEROQUEL100)
 }
 
 _ocr_reader = None  # 전역 싱글턴 — 최초 1회만 로드
@@ -139,35 +138,57 @@ def read_text_from_crop(img_crop) -> list:
     """
     크롭 이미지에서 EasyOCR로 텍스트 인식 (다중 전처리 변형 적용).
 
-    3종 전처리 변형(음각/양각/노이즈)을 순서대로 시도하며
-    중복 문자열은 제거 후 합산 반환합니다.
+    EasyOCR 내부의 rotation_info를 사용하면 세로로 된 'SK'를 가로 'U'로 잘못 인식할 때
+    'U'의 신뢰도가 더 높으면 'SK'를 버리는 문제가 있습니다.
+    따라서 내부 회전을 끄고, 4방향으로 직접 회전시킨 이미지를 모두 OCR에 넣어
+    나오는 모든 텍스트(오인식 포함)를 수집한 뒤 매핑 DB로 걸러냅니다.
     """
-    variants = _preprocess_for_ocr(img_crop)
-    reader = _get_reader()
+    # 4가지 방향 물리적 회전
+    crops = [
+        img_crop,
+        cv2.rotate(img_crop, cv2.ROTATE_90_CLOCKWISE),
+        cv2.rotate(img_crop, cv2.ROTATE_180),
+        cv2.rotate(img_crop, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    ]
 
+    reader = _get_reader()
     all_results: list = []
     seen: set = set()
 
-    for variant in variants:
-        try:
-            raw = reader.readtext(
-                variant,
-                detail=1,
-                rotation_info=ROTATION_ANGLES,
-                mag_ratio=2.0,          # 1.5 → 2.0: 입력 확대로 문자 인식률 향상
-                contrast_ths=0.1,
-                adjust_contrast=0.8,
-                text_threshold=0.5,     # 기본값 0.7 → 낮춰서 저대비 각인 탐지
-                low_text=0.3,           # 기본값 0.4 → 낮춰서 흐린 글자도 탐지
-            )
-        except Exception:
-            continue
+    for crop in crops:
+        variants = _preprocess_for_ocr(crop)
+        for variant in variants:
+            try:
+                # rotation_info 파라미터 제거 (내부 회전 비교 방지)
+                raw = reader.readtext(
+                    variant,
+                    detail=1,
+                    mag_ratio=2.0,
+                    contrast_ths=0.1,
+                    adjust_contrast=0.8,
+                    text_threshold=0.5,
+                    low_text=0.3,
+                )
+            except Exception:
+                continue
 
-        for (_, text, conf) in raw:
-            t = str(text).strip()
-            if t and t not in seen:
-                seen.add(t)
-                all_results.append((t, float(conf)))
+            if not raw:
+                continue
+
+            # 1. 개별 토큰 수집
+            for (_, text, conf) in raw:
+                t = str(text).strip()
+                if t and t not in seen:
+                    seen.add(t)
+                    all_results.append((t, float(conf)))
+
+            # 2. 쪼개진 박스 합치기 (예: 'S' 와 'K' 가 분리된 경우 대비)
+            if len(raw) > 1:
+                combined_text = "".join([str(text).strip() for _, text, _ in raw])
+                avg_conf = sum([float(conf) for _, _, conf in raw]) / len(raw)
+                if combined_text and combined_text not in seen:
+                    seen.add(combined_text)
+                    all_results.append((combined_text, float(avg_conf)))
 
     return all_results
 
@@ -193,14 +214,14 @@ def _find_match(ocr_norm: str, mapping: dict, yolo_label: int = None):
     if ocr_norm in mapping:
         return _resolve(mapping[ocr_norm])
 
-    # 2) 부분 일치 — OCR 결과가 매핑 키의 부분 문자열인 경우만 허용 (5자 이상)
+    # 2) 부분 일치 — OCR 결과가 매핑 키의 부분 문자열인 경우만 허용 (3자 이상)
     #   · ocr_norm in key : OCR이 각인 일부만 읽은 경우
     #                       예) OCR="TYLEN",    key="TYLENOL"    → 허용
     #                       예) OCR="SEROQUEL", key="SEROQUEL100" → 허용
     #   · key in ocr_norm 방향은 허용하지 않음
     #     매핑 코드가 OCR 결과보다 짧으면 노이즈·오탐으로 간주
     #                       예) OCR="ZD4522200", key="ZD452220" → 차단
-    if len(ocr_norm) >= 5:
+    if len(ocr_norm) >= 3:
         hits = []
         for key, candidates in mapping.items():
             if ocr_norm in key:
@@ -286,6 +307,14 @@ def correct_predictions(
                 break
 
         if matched_class is None:
+            continue
+
+        # OCR 신뢰도가 현재 신뢰도보다 0.6 이상 낮으면 보정 생략
+        if score - matched_ocr_conf >= 0.6:
+            prefix    = f"({img_name}) " if img_name else ""
+            orig_name = class_names.get(label, f"cls_{label}")
+            print(f"  [OCR 생략] {prefix}{orig_name}  "
+                  f"YOLO/Stage2={score:.2f}  OCR={matched_ocr_conf:.2f}  (차이 {score - matched_ocr_conf:.2f} ≥ 0.6)")
             continue
 
         # ── OCR 매핑 성공 → 클래스·신뢰도를 OCR 결과로 교체 ──
