@@ -1,6 +1,6 @@
 """
 src/model.py
-YOLOv8/11 사전 학습 가중치 로드 + nc=56 or 71 헤드 교체
+YOLOv8/11 사전 학습 가중치 로드 + nc=56 or 74 헤드 교체
 """
 
 import gc
@@ -12,7 +12,7 @@ from ultralytics import YOLO
 from config import TRAIN, DATASET_YAML, MODELS_DIR, RESULTS_DIR, ROOT
 
 
-def build_model(nc: int = 71) -> YOLO:
+def build_model(nc: int = 74) -> YOLO:
     """
     YOLO 모델 가중치를 불러옵니다.
     클래스 개수(nc)에 따른 헤드 교체는 YOLO.train() 시 data.yaml을 읽고 자동으로 수행됩니다.
@@ -39,7 +39,7 @@ def _run_train(yaml_path: str, run_name: str):
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-    model = build_model(nc=71)
+    model = build_model(nc=74)
     model.train(
         data          = yaml_path,
         project       = str(RESULTS_DIR),
@@ -118,9 +118,10 @@ def train_all_folds(n_folds: int = 5):
         print(f"  Fold {fold} / {n_folds} 학습 시작")
         print(f"{'='*50}")
 
-        # fold별 임시 yaml 생성
+        # fold별 임시 yaml 생성 (절대 경로 강제 지정으로 다른 PC에서 경로 문제 방지)
         with open(base_yaml, encoding="utf-8") as f:
             data = yaml.safe_load(f)
+        data["path"]  = str(ROOT.absolute())  # 절대 경로 명시
         data["train"] = f"data/splits/fold{fold}_train.txt"
         data["val"]   = f"data/splits/fold{fold}_val.txt"
         tmp_yaml = ROOT / f"data_fold{fold}.yaml"
@@ -253,4 +254,4 @@ def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0
 
 
 if __name__ == "__main__":
-    build_model(nc=71)
+    build_model(nc=74)

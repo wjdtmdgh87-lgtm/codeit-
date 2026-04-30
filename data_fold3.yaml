@@ -70,7 +70,10 @@ names:
   68: 쿠에타핀정25mg
   69: 브린텔릭스정20mg
   70: 자이프렉사정10mg
-nc: 71
+  71: 삐콤씨에프정 618.6mg/병
+  72: 비타비백정 100mg/병
+  73: 메가파워정 90mg/병
+nc: 74
 path: .
 test: data/images/test
 train: data/splits/fold3_train.txt

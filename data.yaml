@@ -6,7 +6,7 @@ train: data/splits/fold1_train.txt   # train 이미지 경로 목록
 val:   data/splits/fold1_val.txt     # val   이미지 경로 목록
 test:  data/images/test              # 라벨 없는 추론용 이미지 폴더
 
-nc: 71
+nc: 74
 names:
   0: 보령부스파정 5mg
   1: 뮤테란캡슐 100mg
@@ -79,3 +79,6 @@ names:
   68: 쿠에타핀정25mg
   69: 브린텔릭스정20mg
   70: 자이프렉사정10mg
+  71: 삐콤씨에프정 618.6mg/병
+  72: 비타비백정 100mg/병
+  73: 메가파워정 90mg/병
