@@ -49,6 +49,7 @@ data/labels/train/**/*
 !data/labels/train/**/README.md
 
 data/splits/**/*
+!data/splits/**/README.md
 data/crops/**/*
 
 *.cache
