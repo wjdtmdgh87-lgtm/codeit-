@@ -25,9 +25,9 @@ IMG_W, IMG_H  = 976, 1280
 # ── 학습 하이퍼파라미터 ────────────────────────
 TRAIN = dict(
     model         = "yolo12n.pt",
-    imgsz         = 1280,
-    batch         = 4,
-    epochs        = 150,
+    imgsz         = 832,
+    batch         = 8,
+    epochs        = 50,
     optimizer     = "SGD",
     lr0           = 0.01,
     lrf           = 0.01,
@@ -59,7 +59,7 @@ STAGE1_BYPASS_THR = 0.85   # YOLO conf >= 이 값이면 Stage 2 생략
 # Stage 2를 신뢰도 무관하게 항상 건너뛸 클래스 ID 목록
 STAGE2_SKIP_CLASSES: set = {
     # 예시) 0, 5, 12
-    61,  # 쎄로켈정100mg(쿠에티아핀푸마르산염)
+    60,  # 쎄로켈정100mg(쿠에티아핀푸마르산염)
 
 }
 

@@ -1,6 +1,6 @@
 """
 src/model.py
-YOLOv8/11 사전 학습 가중치 로드 + nc=56 or 74 헤드 교체
+YOLOv8/11 사전 학습 가중치 로드 + nc=56 or 73 헤드 교체
 """
 
 import gc
@@ -12,7 +12,7 @@ from ultralytics import YOLO
 from config import TRAIN, DATASET_YAML, MODELS_DIR, RESULTS_DIR, ROOT
 
 
-def build_model(nc: int = 74) -> YOLO:
+def build_model(nc: int = 73) -> YOLO:
     """
     YOLO 모델 가중치를 불러옵니다.
     클래스 개수(nc)에 따른 헤드 교체는 YOLO.train() 시 data.yaml을 읽고 자동으로 수행됩니다.
@@ -25,6 +25,11 @@ def build_model(nc: int = 74) -> YOLO:
 def _run_train(yaml_path: str, run_name: str):
     """학습 실행 공통 함수"""
     cfg    = TRAIN
+    run_dir = RESULTS_DIR / run_name
+    if run_dir.exists():
+        shutil.rmtree(run_dir)
+        print(f"[초기화] 이전 학습 디렉토리 삭제: {run_dir}")
+
     # 1. CUDA(NVIDIA GPU) 확인
     if torch.cuda.is_available():
         device = "0"  # 또는 "cuda"
@@ -39,7 +44,7 @@ def _run_train(yaml_path: str, run_name: str):
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-    model = build_model(nc=74)
+    model = build_model(nc=73)
     model.train(
         data          = yaml_path,
         project       = str(RESULTS_DIR),
@@ -254,4 +259,4 @@ def predict(source: str, weights: str = None, conf: float = 0.25, iou: float = 0
 
 
 if __name__ == "__main__":
-    build_model(nc=74)
+    build_model(nc=73)
