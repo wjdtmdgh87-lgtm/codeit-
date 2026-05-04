@@ -85,14 +85,21 @@ def save_submission_csv(
 
 
 def get_fold_models() -> list:
-    """models/ 폴더에서 fold*_best.pt 파일 목록 반환"""
-    models = sorted(MODELS_DIR.glob("fold*_best.pt"))
+    """models/ 폴더에서 설정된 아키텍처의 fold*_best.pt 파일 목록 반환 (폴드당 1개)"""
+    model_stem = Path(TRAIN["model"]).stem          # e.g. "yolo12n"
+    pattern    = f"fold*_{model_stem}_best.pt"
+    models     = sorted(MODELS_DIR.glob(pattern))
+
+    # 아키텍처 명시 파일이 없으면 구형 단일-아키텍처 명명 규칙으로 폴백
+    if not models:
+        models = sorted(MODELS_DIR.glob("fold*_best.pt"))
+
     if not models:
         raise FileNotFoundError(
-            f"[오류] {MODELS_DIR} 에 fold*_best.pt 파일이 없습니다.\n"
+            f"[오류] {MODELS_DIR} 에 {pattern} 파일이 없습니다.\n"
             "  먼저 python main.py --mode train_all 을 실행하세요."
         )
-    print(f"[앙상블] 모델 {len(models)}개 발견:")
+    print(f"[앙상블] 모델 {len(models)}개 발견 (아키텍처: {model_stem}):")
     for m in models:
         print(f"  {m.name}")
     return [str(m) for m in models]
@@ -371,24 +378,15 @@ def wbf_predict(source: str, conf: float = 0.25, iou: float = 0.45,
     use_stage2 : True이면 Stage 2 crop 분류기 보정 적용
     """
     weight_paths = get_fold_models()
-    models       = [YOLO(w) for w in weight_paths]
-    class_names  = models[0].names
+    # Load only the first model temporarily to get class_names, then unload
+    _tmp = YOLO(weight_paths[0])
+    class_names = _tmp.names
+    del _tmp
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
-    # Stage 2 모델 로드 (이미지 루프 전 1회)
-    stage2_model = None
-    idx_to_class = None
-    if use_stage2:
-        try:
-            from crop_classifier import load_stage2_model, apply_stage2
-            stage2_model, idx_to_class = load_stage2_model()
-        except FileNotFoundError as e:
-            print(f"[경고] {e}")
-            use_stage2 = False
-        except ImportError:
-            print("[경고] crop_classifier 모듈을 찾을 수 없습니다. Stage 2를 건너뜁니다.")
-            use_stage2 = False
-
-    # OCR 매핑 테이블 로드 (이미지 루프 전 1회)
+    # OCR 매핑 테이블 로드 (CPU만 사용, VRAM 영향 없음)
     print_mapping = {}
     if use_ocr:
         try:
@@ -417,7 +415,7 @@ def wbf_predict(source: str, conf: float = 0.25, iou: float = 0.45,
     save_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"\n[WBF 앙상블] {len(img_paths)}장 예측 시작")
-    print(f"  모델 수   : {len(models)}개")
+    print(f"  모델 수   : {len(weight_paths)}개")
     print(f"  conf      : {conf}")
     print(f"  wbf_iou   : {wbf_iou}")
     print(f"  저장 위치 : {save_dir}\n")
@@ -426,25 +424,48 @@ def wbf_predict(source: str, conf: float = 0.25, iou: float = 0.45,
     all_detections  = []  # [(image_id, img_w, img_h, result), ...]
     category_mapping = build_category_mapping()
 
-    # 모델별로 전체 이미지를 한 번에 배치 예측 — YOLO 내부 배치 처리 활용
+    # 모델별로 전체 이미지를 청크 단위로 예측 — 모델 하나씩 로드/해제로 VRAM 절약
+    # Stage 2는 VRAM을 많이 쓰므로 fold 예측이 모두 끝난 뒤에 로드
     print("[WBF 앙상블] 모델별 배치 예측 중...")
+    CHUNK = 64  # 한 번에 처리할 이미지 수 (VRAM에 맞게 조정)
     str_paths = [str(p) for p in img_paths]
     per_model_preds = []
-    for m_idx, m in enumerate(models, 1):
-        raw = m.predict(str_paths, conf=conf, iou=iou, verbose=False, save=False)
+    for m_idx, weight_path in enumerate(weight_paths, 1):
+        m = YOLO(weight_path)
         fold_preds = []
-        for r in raw:
-            if len(r.boxes) == 0:
-                fold_preds.append({"boxes": [], "scores": [], "labels": []})
-                continue
-            h, w = r.orig_shape
-            fold_preds.append({
-                "boxes":  [[b[0]/w, b[1]/h, b[2]/w, b[3]/h] for b in r.boxes.xyxy.tolist()],
-                "scores": [float(c) for c in r.boxes.conf.tolist()],
-                "labels": [int(c) for c in r.boxes.cls.tolist()],
-            })
+        for chunk_start in range(0, len(str_paths), CHUNK):
+            chunk = str_paths[chunk_start:chunk_start + CHUNK]
+            raw = m.predict(chunk, conf=conf, iou=iou, verbose=False, save=False)
+            for r in raw:
+                if len(r.boxes) == 0:
+                    fold_preds.append({"boxes": [], "scores": [], "labels": []})
+                    continue
+                h, w = r.orig_shape
+                fold_preds.append({
+                    "boxes":  [[b[0]/w, b[1]/h, b[2]/w, b[3]/h] for b in r.boxes.xyxy.tolist()],
+                    "scores": [float(c) for c in r.boxes.conf.tolist()],
+                    "labels": [int(c) for c in r.boxes.cls.tolist()],
+                })
         per_model_preds.append(fold_preds)
-        print(f"  fold {m_idx}/{len(models)} 완료")
+        del m
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        print(f"  모델 {m_idx}/{len(weight_paths)} 완료")
+
+    # fold 예측 완료 후 Stage 2 모델 로드 (VRAM 공유 방지)
+    stage2_model = None
+    idx_to_class = None
+    if use_stage2:
+        try:
+            from crop_classifier import load_stage2_model, apply_stage2
+            stage2_model, idx_to_class = load_stage2_model()
+        except FileNotFoundError as e:
+            print(f"[경고] {e}")
+            use_stage2 = False
+        except ImportError:
+            print("[경고] crop_classifier 모듈을 찾을 수 없습니다. Stage 2를 건너뜁니다.")
+            use_stage2 = False
 
     for idx, img_path in enumerate(img_paths, 1):
         img = cv2.imread(str(img_path))
@@ -452,7 +473,7 @@ def wbf_predict(source: str, conf: float = 0.25, iou: float = 0.45,
             print(f"  [{idx}/{len(img_paths)}] 건너뜀 (손상): {img_path.name}")
             continue
 
-        all_preds = [per_model_preds[m_idx][idx - 1] for m_idx in range(len(models))]
+        all_preds = [per_model_preds[m_idx][idx - 1] for m_idx in range(len(weight_paths))]
         result = run_wbf(all_preds, iou_thr=wbf_iou)
 
         # 이미지 꼭지점 접면 오탐 제거
@@ -496,8 +517,6 @@ def wbf_predict(source: str, conf: float = 0.25, iou: float = 0.45,
     print(f"  저장 위치     : {save_dir}")
 
     save_submission_csv(all_detections, save_dir, category_mapping=category_mapping)
-    # 예측 완료 후 GPU 메모리 해제
-    del models
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
