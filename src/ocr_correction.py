@@ -33,15 +33,11 @@ CONFUSING_CLASSES = {
 
     7,   # 에어탈정(아세클로페낙)
     11,  # 써스펜8시간이알서방정 650mg
-    14,  # 크레스토정 20mg
-    23,  # 노바스크정 5mg
     27,  # 아토르바정 10mg
     30,  # 자누비아정 50mg
     40,  # 트라젠타정(리나글립틴)
-    44,  # 트라젠타듀오정 2.5/850mg
     45,  # 아질렉트정(라사길린메실산염)
     51,  # 제미메트서방정 50/1000mg
-    53,  # 로수젯정10/5밀리그램
 }
 
 _ocr_reader = None  # 전역 싱글턴 — 최초 1회만 로드
@@ -323,13 +319,16 @@ def correct_predictions(
         prefix    = f"({img_name}) " if img_name else ""
 
         if matched_class != label:
+            new_score = max(matched_ocr_conf, conf_thr)
             print(f"  [OCR 보정] {prefix}{orig_name} → {new_name} "
-                  f"(각인: {matched_text}) conf {score:.2f} → {matched_ocr_conf:.2f}")
+                  f"(각인: {matched_text}) conf {score:.2f} → {new_score:.2f}")
             labels[i] = matched_class
-        elif score < OCR_TRIGGER_CONF:
+            scores[i] = new_score
+        else:
+            # OCR이 동일 클래스를 확인한 경우 → 더 높은 신뢰도 유지, 최소 conf_thr 보장
+            new_score = max(score, matched_ocr_conf, conf_thr)
             print(f"  [OCR 확인] {prefix}{orig_name} 일치 "
-                  f"(각인: {matched_text}) conf {score:.2f} → {matched_ocr_conf:.2f}")
-
-        scores[i] = matched_ocr_conf
+                  f"(각인: {matched_text}) conf {score:.2f} → {new_score:.2f}")
+            scores[i] = new_score
 
     return {"boxes": boxes, "scores": scores, "labels": labels}
