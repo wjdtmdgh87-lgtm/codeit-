@@ -1,12 +1,3 @@
-# 경구약제 객체 검출 — YOLO 학습 설정 (Ultralytics)
-
-path: .           # 이 yaml 파일이 있는 폴더 기준
-# 전체 데이터 학습하려면 data/images로 변환
-train: data/splits/fold1_train.txt   # train 이미지 경로 목록
-val:   data/splits/fold1_val.txt     # val   이미지 경로 목록
-test:  data/images/test              # 라벨 없는 추론용 이미지 폴더
-
-nc: 73
 names:
   0: 보령부스파정 5mg
   1: 뮤테란캡슐 100mg
@@ -81,3 +72,8 @@ names:
   70: 삐콤씨에프정 618.6mg/병
   71: 비타비백정 100mg/병
   72: 메가파워정 90mg/병
+nc: 73
+path: C:\Users\ldk40\OneDrive\Desktop\sprint1Project
+test: data/images/test
+train: data/splits/fold4_train.txt
+val: data/splits/fold4_val.txt

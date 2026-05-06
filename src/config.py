@@ -1,88 +1,75 @@
 ﻿"""
 src/config.py
-- 공통 경로 및 학습 하이퍼파라미터 설정 파일
-- 운영체제(맥/윈도우)와 상관없이 데이터셋 버전만 지정하면
-  모델 코드에서 자동으로 data.yaml을 탐색하도록 구성
 """
 
 from pathlib import Path
-import os
 
-# 프로젝트 루트
-ROOT = Path(__file__).resolve().parent.parent
+ROOT          = Path(__file__).resolve().parent.parent
 
-# ── 프로젝트 내부 경로 ─────────────────────────────────────────────
-DATA_DIR = ROOT / "data"
+# ── 경로 ──────────────────────────────────────
+DATA_DIR      = ROOT / "data"
 TRAIN_IMG_DIR = DATA_DIR / "images" / "train"
-TEST_IMG_DIR = DATA_DIR / "images" / "test"
-ANNOT_DIR = DATA_DIR / "labels" / "train"
-MODELS_DIR = ROOT / "models"
-RESULTS_DIR = ROOT / "results"
+TEST_IMG_DIR  = DATA_DIR / "images" / "test"
+ANNOT_DIR     = DATA_DIR / "labels" / "train"
+MODELS_DIR    = ROOT / "models"
+RESULTS_DIR   = ROOT / "results"
 
-# ── 데이터셋 설정 ────────────────────────────────────────────────
-# 하드코딩된 절대경로 대신 데이터셋 "버전"만 지정
-# 예:
-#   맥(zsh): export DATASET_VERSION=v9
-#   윈도우(PowerShell): $env:DATASET_VERSION="v9"
-# 지정하지 않으면 기본값은 v9
-DATASET_VERSION = os.getenv("DATASET_VERSION", "v9")
+# dataset.yaml 경로 (프로젝트 루트에 위치)
+DATASET_YAML  = ROOT / "data.yaml"
 
-# 필요하면 data.yaml 절대경로를 환경변수로 직접 지정할 수도 있음
-# 예:
-#   export DATASET_YAML="/Users/username/projects/v9/.../data.yaml"
-# 이 값은 model.py에서 우선적으로 사용함
+#기하님 전용: DATASET_YAML = Path("/Users/tnerkfkr/projects/v9/v9_2unzipped/모델러전달_패키지_v9/data.yaml")
 
-# ── 이미지 원본 규격 ─────────────────────────────────────────────
-IMG_W, IMG_H = 976, 1280
+# ── 이미지 원본 규격 ───────────────────────────
+IMG_W, IMG_H  = 976, 1280
 
-# ── 학습 하이퍼파라미터 ─────────────────────────────────────────
-# 현재 baseline 빠른 검증용 설정
+# ── 학습 하이퍼파라미터 ────────────────────────
 TRAIN = dict(
-    # 사용할 모델 가중치
-    model="yolo11s.pt",
-
-    # 입력 이미지 크기
-    imgsz=1280,
-
-    # 배치 크기
-    batch=4,
-
-    # 빠른 확인용이므로 5 epoch
-    epochs=5,
-
-    # 최적화 설정
-    optimizer="SGD",
-    lr0=0.01,
-    lrf=0.01,
-    momentum=0.937,
-    weight_decay=5e-4,
-    warmup_epochs=3,
-
-    # early stopping 비활성화
-    patience=0,
-
-    # 몇 epoch마다 checkpoint 저장할지
-    save_period=10,
-
-    # loss/augmentation 관련
-    cls=1.5,
-    degrees=90.0,
-    fliplr=0.5,
-    flipud=0.5,
-    hsv_h=0.015,
-    hsv_s=0.2,
-    hsv_v=0.2,
-    mosaic=1.0,
-    mixup=0.1,
-    copy_paste=0.5,
-
-    # 마지막 N epoch는 mosaic 없이 학습
-    close_mosaic=15,
+    model         = "yolo12n.pt",
+    imgsz         = 832,
+    batch         = 8,
+    epochs        = 50,
+    optimizer     = "SGD",
+    lr0           = 0.01,
+    lrf           = 0.01,
+    momentum      = 0.937,
+    weight_decay  = 5e-4,
+    warmup_epochs = 3,
+    patience      = 30, # 30, 0=early stopping 해제
+    save_period   = 10,
+    cls           = 1.5,
+    degrees       = 90.0,
+    fliplr        = 0.5,
+    flipud        = 0.5,
+    hsv_h         = 0.015,
+    hsv_s         = 0.2,
+    hsv_v         = 0.2,
+    mosaic        = 0.8,
+    mixup         = 0.05,
+    copy_paste    = 0.5,
+    close_mosaic = 30, # 마지막 15 epoch는 mosaic 없이 학습
 )
 
-# ── K-Fold 설정 ────────────────────────────────────────────────
-KFOLD = dict(
-    n_folds=5,
-    use_fold=0,
-    seed=42,
+# ── K-Fold ─────────────────────────────────────
+KFOLD = dict(n_folds=5, use_fold=0, seed=42)
+
+# ── Stage 2 (Crop Classifier) ──────────────────
+CROPS_DIR         = DATA_DIR / "crops"
+STAGE1_BYPASS_THR = 0.85   # YOLO conf >= 이 값이면 Stage 2 생략
+
+# Stage 2를 신뢰도 무관하게 항상 건너뛸 클래스 ID 목록
+STAGE2_SKIP_CLASSES: set = {
+    # 예시) 0, 5, 12
+    60,  # 쎄로켈정100mg(쿠에티아핀푸마르산염)
+
+}
+
+STAGE2 = dict(
+    imgsz    = 300,
+    batch    = 64,
+    epochs   = 50,
+    lr0      = 0.001,
+    patience = 10,
 )
+
+RARE_CLASS_THR  = 50   # bbox 수 이하 클래스 → crop 증강 대상
+CROPS_PER_CLASS = 200  # train 크롭 클래스당 목표 수 (부족하면 증강으로 패딩)
