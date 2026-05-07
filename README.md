@@ -1,6 +1,10 @@
 # 알약 객체 검출 및 분류 파이프라인 (2-Stage + OCR)
 
-경구약제 이미지에서 알약의 위치(바운딩 박스)를 검출하고, 복잡한 알약을 정확히 분류하기 위해 **YOLOv11 + EfficientNet-B3 + EasyOCR**을 결합한 하이브리드 객체 검출 프로젝트입니다.
+경구약제 이미지에서 알약의 위치(바운딩 박스)를 검출하고, 복잡한 알약을 정확히 분류하기 위해 **YOLOv12n + EfficientNet-B3 + EasyOCR**을 결합한 하이브리드 객체 검출 프로젝트입니다.
+
+- **데이터셋:** v11 / 71클래스 경구약제
+- **YOLO 모델:** `yolo12n.pt` (파라미터 ~2.59M × 5 fold)
+- **Stage 2 분류기:** EfficientNet-B3 (파라미터 ~10.9M)
 
 ---
 
@@ -53,6 +57,20 @@ python main.py --mode [모드] [옵션]
 
 ---
 
+## ⚙️ 현재 학습 설정 (`src/config.py`)
+
+| 항목 | 값 |
+|------|----|
+| 베이스 모델 | `yolo12n.pt` |
+| 이미지 크기 | 832 |
+| 배치 크기 | 8 |
+| Epochs | 150 (patience=30) |
+| 옵티마이저 | SGD (lr=0.01) |
+| K-Fold | 5 (seed=42) |
+| Stage 2 bypass | conf ≥ 0.85 → Stage 2 생략 |
+
+---
+
 ## 💡 실행 예시
 
 **단일 모델 예측 (기본 파이프라인):**
@@ -89,11 +107,25 @@ results/
 
 ## 📦 설치 및 요구사항
 
+**macOS / CPU-only:**
 ```bash
-# 기본 요구사항 설치
 pip install -r requirements.txt
-
-# 앙상블 및 OCR을 위한 추가 패키지 설치
-pip install ensemble-boxes
-pip install easyocr
 ```
+
+**Windows / Linux + NVIDIA GPU:**
+```bash
+pip install -r requirements.txt
+pip install -r requirements-cuda.txt   # torch+cu128 오버라이드
+```
+
+> `ensemble-boxes`, `easyocr` 는 `requirements.txt` 에 포함되어 있어 별도 설치 불필요합니다.
+
+### 주요 의존성
+
+| 패키지 | 버전 |
+|--------|------|
+| `ultralytics` | 8.4.40 |
+| `torch` | 2.11.0 (+cu128 for GPU) |
+| `easyocr` | 1.7.2 |
+| `ensemble-boxes` | 1.0.9 |
+| `opencv-python` | 4.13.0 |
