@@ -1,16 +1,13 @@
 """
-[수정 사항]
-- 기존 data / train / predict / all 모드는 유지함
-- experiment 모드를 추가해서 실험 이름별로 학습을 실행할 수 있게 함
-- experiment_all 모드를 추가해서 여러 실험을 순차 실행할 수 있게 함
-- compare 모드를 추가해서 누적된 실험 결과를 비교할 수 있게 함
-- 기존 한국어 사용법/출력문은 유지함
+main.py  ← project_root/ 에 위치해야 합니다.
 
 사용법:
-  python main.py --mode data
-  python main.py --mode train
-  python main.py --mode predict --source data/images/test/
-  python main.py --mode all
+  python main.py --mode data           # 데이터 경로 수정 + 통계 출력
+  python main.py --mode train          # fold 1 단일 학습
+  python main.py --mode train_all      # fold 1~5 전체 자동 학습
+  python main.py --mode predict --source data/images/test  # 단일 모델 예측  (--source 필수)
+  python main.py --mode wbf --source data/images/test      # 5-Fold WBF 앙상블 예측  (--source 필수)
+  python main.py --mode all            # data + train 순서대로
   python main.py --mode experiment --exp baseline
   python main.py --mode experiment_all
   python main.py --mode compare
@@ -28,14 +25,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--mode",
-        choices=["data", "train", "predict", "all", "experiment", "experiment_all", "compare"],
+        choices=["data", "train", "train_all", "predict", "wbf", "all", "experiment", "experiment_all", "compare"],
         default="all"
     )
-    parser.add_argument("--source", default=None, help="predict 모드 시 이미지 경로")
+    parser.add_argument("--source",  default=None, help="predict/wbf 모드 시 이미지 경로")
     parser.add_argument("--weights", default=None, help="predict 모드 시 가중치 경로")
-    parser.add_argument("--conf", type=float, default=0.25)
-    parser.add_argument("--exp", default="baseline", help="experiment 모드 실험 이름")
+    parser.add_argument("--conf",    type=float, default=0.25)
+    parser.add_argument("--exp",     default="baseline", help="experiment 모드 실험 이름")
+    parser.add_argument("--no-ocr",  action="store_true", help="OCR 각인 보정 비활성화")
     args = parser.parse_args()
+    use_ocr = not args.no_ocr
 
     if args.mode in ("data", "all"):
         from dataset import build
@@ -44,8 +43,13 @@ def main():
 
     if args.mode in ("train", "all"):
         from model import train
-        print("\n=== 학습 시작 ===")
+        print("\n=== 학습 시작 (fold 1) ===")
         train()
+
+    if args.mode == "train_all":
+        from model import train_all_folds
+        print("\n=== 5-Fold 전체 학습 시작 ===")
+        train_all_folds(n_folds=5)
 
     if args.mode == "predict":
         if not args.source:
@@ -54,7 +58,15 @@ def main():
             return
         from model import predict
         print("\n=== 예측 ===")
-        predict(args.source, weights=args.weights, conf=args.conf)
+        predict(args.source, weights=args.weights, conf=args.conf, use_ocr=use_ocr)
+
+    if args.mode == "wbf":
+        if not args.source:
+            print("[오류] --source 경로를 지정해주세요.")
+            return
+        from wbf_ensemble import wbf_predict
+        print("\n=== WBF 앙상블 예측 ===")
+        wbf_predict(args.source, conf=args.conf, use_ocr=use_ocr)
 
     if args.mode == "experiment":
         from experiment import run_experiment
