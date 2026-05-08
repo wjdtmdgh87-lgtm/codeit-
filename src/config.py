@@ -31,11 +31,11 @@ TRAIN = dict(
     lrf           = 0.01,
     momentum      = 0.937,
     weight_decay  = 5e-4,
-    warmup_epochs = 3,
-    patience      = 30, # 30, 0=early stopping 해제
+    warmup_epochs = 1,
+    patience      = 10,
     save_period   = 10,
     cls           = 1.5,
-    degrees       = 90.0,
+    degrees       = 0,
     fliplr        = 0.5,
     flipud        = 0.5,
     hsv_h         = 0.015,
@@ -44,7 +44,7 @@ TRAIN = dict(
     mosaic        = 0.8,
     mixup         = 0.05,
     copy_paste    = 0.5,
-    close_mosaic = 30, # 마지막 15 epoch는 mosaic 없이 학습
+    close_mosaic = 30,
 )
 
 # ── K-Fold ─────────────────────────────────────

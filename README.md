@@ -1,18 +1,113 @@
-데이터 폴더에 이미지(train,test의 png파일)와 라벨 파일(txt) 넣어주시고 main.py 실행하면 됩니다.
+<h1 align="center">경구약제 알약 객체 검출 파이프라인</h1>
 
-<<<<<<< HEAD
+<p align="center">
+  <b>경구약제 이미지에서 알약의 위치(바운딩 박스)와 클래스(약품명)를 검출하는 YOLO 기반 객체 검출 프로젝트</b>
+</p>
 
-=======
->>>>>>> 22e904b107d64cf1faa6dbedd3c10276dd164460
-# 알약 객체 검출 파이프라인
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white"/>
+  <img src="https://img.shields.io/badge/YOLO12-Ultralytics-FF6B6B?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge"/>
+</p>
 
-경구약제 이미지에서 알약의 위치(바운딩 박스)와 클래스(약품명)를 검출하는 YOLOv11 기반 객체 검출 프로젝트입니다.
+---
+
+## 팀원 구성
+
+<table align="center">
+  <tr>
+    <td align="center" width="150">
+      <img src="docs/profiles/Adam/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
+      <b>Adam</b><br/>
+      <a href="https://github.com/Adam">@Adam</a>
+    </td>
+    <td align="center" width="150">
+      <img src="docs/profiles/Eastar0102/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
+      <b>Eastar0102</b><br/>
+      <a href="https://github.com/Eastar0102">@Eastar0102</a>
+    </td>
+    <td align="center" width="150">
+      <img src="docs/profiles/heewon02/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
+      <b>heewon02</b><br/>
+      <a href="https://github.com/heewon02">@heewon02</a>
+    </td>
+    <td align="center" width="150">
+      <img src="docs/profiles/minjaejeon/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
+      <b>minjaejeon</b><br/>
+      <a href="https://github.com/minjaejeon">@minjaejeon</a>
+    </td>
+    <td align="center" width="150">
+      <img src="docs/profiles/%EA%B8%B0%ED%95%98/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
+      <b>기하</b><br/>
+      <a href="https://github.com/기하">@기하</a>
+    </td>
+    <td align="center" width="150">
+      <img src="docs/profiles/%EB%AC%B4%EC%8B%AC/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
+      <b>무심</b><br/>
+      <a href="https://github.com/wjdtmdgh87-lgtm">@무심</a>
+    </td>
+  </tr>
+</table>
+
+---
+
+## 기술 스택
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white"/>
+  <img src="https://img.shields.io/badge/YOLO-FF6B6B?style=flat-square&logo=yolo&logoColor=white"/>
+  <img src="https://img.shields.io/badge/EasyOCR-00B4D8?style=flat-square"/>
+  <img src="https://img.shields.io/badge/Pandas-150458?style=flat-square&logo=pandas&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Ultralytics-00B4D8?style=flat-square"/>
+</p>
+
+---
+
+## 프로젝트 구조
+
+```
+📦 project-root
+├── 📂 src/
+│   ├── config.py              # 경로 및 하이퍼파라미터 설정
+│   ├── dataset.py             # 데이터 경로 수정 및 통계 출력
+│   ├── model.py               # 학습 및 예측
+│   ├── ocr_correction.py      # OCR 기반 각인 보정
+│   └── wbf_ensemble.py        # 5-Fold WBF 앙상블
+├── 📂 data/
+│   ├── images/train/          # 학습 이미지
+│   ├── images/test/           # 테스트 이미지
+│   ├── labels/train/          # YOLO 형식 라벨
+│   └── splits/                # fold별 train/val txt
+├── 📂 models/                 # 학습 완료된 가중치
+├── 📂 results/                # 학습 결과 (csv, confusion matrix 등)
+├── 📂 docs/
+│   └── profiles/              # 팀원 프로필
+├── data.yaml                  # YOLO 데이터셋 설정
+├── code_mapping.csv           # 코드-약품명 매핑
+└── main.py
+```
+
+---
+
+## 설치
+
+```bash
+git clone https://github.com/wjdtmdgh87-lgtm/codeit-.git
+cd codeit-
+pip install -r requirements.txt
+```
+
+GPU(CUDA) 환경:
+
+```bash
+pip install -r requirements-cuda.txt
+```
 
 ---
 
 ## 실행 방법
 
-프로젝트 루트(`main.py`가 있는 폴더)에서 실행합니다.
+데이터 폴더에 이미지(`train`, `test`)와 라벨 파일(`.txt`)을 넣은 후 프로젝트 루트에서 실행합니다.
 
 ```bash
 python main.py --mode [모드] [옵션]
@@ -62,7 +157,7 @@ python main.py --mode predict --source data/images/test/ --conf 0.5
 
 ### `--mode wbf`
 5-Fold WBF(Weighted Boxes Fusion) 앙상블 예측을 실행합니다.  
-`models/` 폴더의 `fold*_best.pt` 파일을 자동으로 수집해서 예측합니다.  
+`models/` 폴더의 `fold*_best.pt` 파일을 자동으로 수집합니다.  
 결과는 `runs/detect/wbf_{모델명}/`에 저장됩니다.
 
 ```bash
@@ -89,6 +184,7 @@ python main.py --mode all
 | `--source` | 예측 이미지 경로 또는 폴더 | `None` |
 | `--weights` | 예측 시 사용할 가중치 경로 | `models/best_model.pt` |
 | `--conf` | 신뢰도 임계값 | `0.25` |
+| `--no-ocr` | OCR 각인 보정 비활성화 | `False` |
 
 ---
 
@@ -114,18 +210,6 @@ results/
 
 ---
 
-## 설치
-
-```bash
-pip install -r requirements.txt
-```
-
-WBF 앙상블 사용 시 추가 설치가 필요합니다.
-
-```bash
-pip install ensemble-boxes
-<<<<<<< HEAD
-```
-=======
-```
->>>>>>> 22e904b107d64cf1faa6dbedd3c10276dd164460
+<p align="center">
+  Made with ❤️ by Team LGTM
+</p>
