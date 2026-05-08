@@ -1,0 +1,29 @@
+experiment_name: yolo_mac_baseline
+# 모델 2 기본 설정을 그대로 사용하는 기준 실험
+
+model: yolo11s.pt
+imgsz: 1280
+batch: 4
+epochs: 150
+patience: 15
+optimizer: SGD
+
+lr0: 0.01
+lrf: 0.01
+momentum: 0.937
+weight_decay: 0.0005
+warmup_epochs: 3
+save_period: 10
+
+cls: 1.5
+
+degrees: 90.0
+fliplr: 0.5
+flipud: 0.5
+hsv_h: 0.015
+hsv_s: 0.2
+hsv_v: 0.2
+mosaic: 1.0
+mixup: 0.1
+copy_paste: 0.5
+close_mosaic: 15

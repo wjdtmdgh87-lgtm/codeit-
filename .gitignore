@@ -1,0 +1,11 @@
+.DS_Store
+.venv/
+results/
+__pycache__/
+*.pyc
+yolo11s.pt
+data.yaml
+data/
+models/
+sprint_ai_project1_data/
+yolo11n.pt

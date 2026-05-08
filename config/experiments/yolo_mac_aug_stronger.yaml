@@ -1,0 +1,29 @@
+experiment_name: yolo_mac_aug_stronger
+# 모델 2 기본 대비 증강을 더 강하게 적용하는 실험
+
+model: yolo11s.pt
+imgsz: 1280
+batch: 4
+epochs: 150
+patience: 15
+optimizer: SGD
+
+lr0: 0.01
+lrf: 0.01
+momentum: 0.937
+weight_decay: 0.0005
+warmup_epochs: 3
+save_period: 10
+
+cls: 1.5
+
+degrees: 120.0
+fliplr: 0.5
+flipud: 0.5
+hsv_h: 0.02
+hsv_s: 0.3
+hsv_v: 0.3
+mosaic: 1.0
+mixup: 0.2
+copy_paste: 0.7
+close_mosaic: 20
