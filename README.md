@@ -92,7 +92,7 @@
 [승호]: https://www.notion.so/348835bcc7588014bdb7d345644b534b?source=copy_link
 [민재]: https://www.notion.so/AI-_10-_-2_6-_AI-_-2026_04-05-34857454ec1d80d690c9d09c8165806f?source=copy_link
 [동규]: https://www.notion.so/6-_-_-34850973847880a49959d7639bbfec66?source=copy_link
-[기하]: 
+[기하]: docs/profiles/기하.pdf
 [희원]:https://www.notion.so/6-Daily-35d57c90138b8005b36fc16e96cb7b28?source=copy_link
 ## 📁 프로젝트 구조
 
