@@ -77,14 +77,22 @@
 
 ## 협업일지
 
+## 협업일지
+
 | 이름 | 링크 |
 |------|------|
-| 성치용 | https://broken-a-lot-of-bone.tistory.com/category/%EC%B4%88%EA%B8%89%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8_%EA%B2%BD%EA%B5%AC%EC%95%BD%EC%B2%B4_%ED%83%90%EC%A7%80|
-| 정승호 | https://www.notion.so/348835bcc7588014bdb7d345644b534b?source=copy_link|
-| 전민재 | https://www.notion.so/AI-_10-_-2_6-_AI-_-2026_04-05-34857454ec1d80d690c9d09c8165806f?source=copy_link|
-| 임동규 | https://www.notion.so/6-_-_-34850973847880a49959d7639bbfec66?source=copy_link|
-| 송기하 | https://broken-a-lot-of-bone.tistory.com/category/%EC%B4%88%EA%B8%89%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8_%EA%B2%BD%EA%B5%AC%EC%95%BD%EC%B2%B4_%ED%83%90%EC%A7%80|
-| 조희원 | 
+| 성치용 | [협업일지][치용] |
+| 정승호 | [협업일지][승호] |
+| 전민재 | [협업일지][민재] |
+| 임동규 | [협업일지][동규] |
+| 송기하 | [협업일지][기하] |
+| 조희원 | [협업일지][희원] |
+
+[치용]: https://broken-a-lot-of-bone.tistory.com/category/%EC%B4%88%EA%B8%89%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8_%EA%B2%BD%EA%B5%AC%EC%95%BD%EC%B2%B4_%ED%83%90%EC%A7%80
+[승호]: https://www.notion.so/348835bcc7588014bdb7d345644b534b?source=copy_link
+[민재]: https://www.notion.so/AI-_10-_-2_6-_AI-_-2026_04-05-34857454ec1d80d690c9d09c8165806f?source=copy_link
+[동규]: https://www.notion.so/6-_-_-34850973847880a49959d7639bbfec66?source=copy_link
+[기하]: https://broken-a-lot-of-bone.tistory.com/category/%EC%B4%88%EA%B8%89%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8_%EA%B2%BD%EA%B5%AC%EC%95%BD%EC%B2%B4_%ED%83%90%EC%A7%80
 
 ## 📁 프로젝트 구조
 
