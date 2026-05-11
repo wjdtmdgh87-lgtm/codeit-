@@ -92,8 +92,8 @@
 [승호]: https://www.notion.so/348835bcc7588014bdb7d345644b534b?source=copy_link
 [민재]: https://www.notion.so/AI-_10-_-2_6-_AI-_-2026_04-05-34857454ec1d80d690c9d09c8165806f?source=copy_link
 [동규]: https://www.notion.so/6-_-_-34850973847880a49959d7639bbfec66?source=copy_link
-[기하]: https://broken-a-lot-of-bone.tistory.com/category/%EC%B4%88%EA%B8%89%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8_%EA%B2%BD%EA%B5%AC%EC%95%BD%EC%B2%B4_%ED%83%90%EC%A7%80
-
+[기하]: 
+[희원]:https://www.notion.so/6-Daily-35d57c90138b8005b36fc16e96cb7b28?source=copy_link
 ## 📁 프로젝트 구조
 
 ```
