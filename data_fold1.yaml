@@ -73,7 +73,7 @@ names:
   71: 비타비백정 100mg/병
   72: 메가파워정 90mg/병
 nc: 73
-path: C:\Users\ldk40\OneDrive\Desktop\sprint1Project
+path: /Users/tnerkfkr/projects/code_it-experiment-model
 test: data/images/test
 train: data/splits/fold1_train.txt
 val: data/splits/fold1_val.txt

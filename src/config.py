@@ -27,7 +27,7 @@ TRAIN = dict(
     model         = "yolo12n.pt",
     imgsz         = 832,
     batch         = 8,
-    epochs        = 50,
+    epochs        = 150,
     optimizer     = "SGD",
     lr0           = 0.01,
     lrf           = 0.01,
@@ -66,9 +66,9 @@ STAGE2_SKIP_CLASSES: set = {
 STAGE2 = dict(
     imgsz    = 300,
     batch    = 64,
-    epochs   = 50,
+    epochs   = 150,
     lr0      = 0.001,
-    patience = 10,
+    patience = 30,
 )
 
 RARE_CLASS_THR  = 50   # bbox 수 이하 클래스 → crop 증강 대상
